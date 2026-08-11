@@ -77,6 +77,8 @@ export type BattleAction =
   | { type: 'chooseMove'; moveId: string; now: number }
   | { type: 'answer'; value: number; now: number }
   | { type: 'timeout'; now: number }
+  /** Starts the clock on the catch question once its screen is on show. */
+  | { type: 'beginCatch'; now: number }
   | { type: 'continue' };
 
 export type BattleSetup = {
@@ -273,6 +275,11 @@ export function battleReducer(state: BattleState, action: BattleAction): BattleS
       return resolveTurn(state, { move, correct, elapsedMs });
     }
 
+    case 'beginCatch': {
+      if (state.phase !== 'catching' || state.problemShownAt !== null) return state;
+      return { ...state, problemShownAt: action.now };
+    }
+
     case 'continue': {
       if (state.phase !== 'resolving') return state;
       return { ...state, phase: 'choosing', pendingMoveId: null, problem: null, problemShownAt: null };
@@ -422,10 +429,9 @@ function resolveCatch(
   };
 }
 
-/** Starts the catch timer. The UI calls this when the catch screen appears. */
+/** Convenience wrapper over the `beginCatch` action. */
 export function beginCatch(state: BattleState, now: number): BattleState {
-  if (state.phase !== 'catching') return state;
-  return { ...state, problemShownAt: now };
+  return battleReducer(state, { type: 'beginCatch', now });
 }
 
 export function isOver(state: BattleState): boolean {
