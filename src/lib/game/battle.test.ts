@@ -167,7 +167,7 @@ describe('answers', () => {
     expect(s.bestCombo).toBe(1);
     const glance = s.log.find((l) => l.kind === 'playerGlance');
     expect(glance).toBeDefined();
-    expect(glance!.kind === 'playerGlance' && glance.amount).toBeGreaterThan(0);
+    expect(glance && glance.kind === 'playerGlance' && glance.amount).toBeGreaterThan(0);
   });
 
   it('tells the player the right answer when they miss', () => {
@@ -175,7 +175,7 @@ describe('answers', () => {
     const expected = s.problem!.answer;
     s = battleReducer(s, { type: 'answer', value: expected + 7, now: 1000 });
     const glance = s.log.find((l) => l.kind === 'playerGlance');
-    expect(glance!.kind === 'playerGlance' && glance.correctAnswer).toBe(expected);
+    expect(glance && glance.kind === 'playerGlance' && glance.correctAnswer).toBe(expected);
   });
 
   it('treats a timeout as a wrong answer', () => {
