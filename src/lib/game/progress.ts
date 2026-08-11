@@ -262,12 +262,7 @@ export function xpForBattle(summary: BattleSummary): number {
     // trying.
     return XP_LOSS + Math.floor(summary.correct * 2);
   }
-  return (
-    XP_WIN +
-    stageBonus +
-    summary.bestCombo * XP_PER_COMBO +
-    (summary.caught ? XP_CATCH : 0)
-  );
+  return XP_WIN + stageBonus + summary.bestCombo * XP_PER_COMBO + (summary.caught ? XP_CATCH : 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -435,12 +430,17 @@ export function normaliseProfile(input: unknown): Profile | null {
 
   return {
     version: PROFILE_VERSION,
-    trainerName: typeof raw.trainerName === 'string' && raw.trainerName.trim() ? raw.trainerName : 'Trainer',
+    trainerName:
+      typeof raw.trainerName === 'string' && raw.trainerName.trim() ? raw.trainerName : 'Trainer',
     starterId,
     xp: num(raw.xp, 0),
     caught: [...new Set(caught)],
     badges: Array.isArray(raw.badges)
-      ? [...new Set(raw.badges.filter((b): b is string => typeof b === 'string' && knownBadges.has(b)))]
+      ? [
+          ...new Set(
+            raw.badges.filter((b): b is string => typeof b === 'string' && knownBadges.has(b)),
+          ),
+        ]
       : [],
     battlesWon: num(raw.battlesWon, 0),
     battlesLost: num(raw.battlesLost, 0),
@@ -449,9 +449,12 @@ export function normaliseProfile(input: unknown): Profile | null {
     bestCombo: num(raw.bestCombo, 0),
     tier: clampTier(num(raw.tier, 1)),
     recentAttempts: Array.isArray(raw.recentAttempts)
-      ? (raw.recentAttempts.filter(
-          (a) => typeof a === 'object' && a !== null && typeof (a as Attempt).correct === 'boolean',
-        ) as Attempt[]).slice(-ADAPT_WINDOW)
+      ? (
+          raw.recentAttempts.filter(
+            (a) =>
+              typeof a === 'object' && a !== null && typeof (a as Attempt).correct === 'boolean',
+          ) as Attempt[]
+        ).slice(-ADAPT_WINDOW)
       : [],
     skillStats: typeof raw.skillStats === 'object' && raw.skillStats !== null ? raw.skillStats : {},
     streak: {

@@ -35,9 +35,27 @@ export default function HomePage() {
   const caughtCount = new Set(profile.caught).size;
 
   const tiles = [
-    { href: '/play', icon: '⚔️', title: tr('battle'), sub: tr('battleSub'), accent: 'from-rose-500/30' },
-    { href: '/album', icon: '📗', title: tr('album'), sub: tr('albumSub'), accent: 'from-emerald-500/30' },
-    { href: '/progress', icon: '🏆', title: tr('progress'), sub: tr('progressSub'), accent: 'from-amber-500/30' },
+    {
+      href: '/play',
+      icon: '⚔️',
+      title: tr('battle'),
+      sub: tr('battleSub'),
+      accent: 'from-rose-500/30',
+    },
+    {
+      href: '/album',
+      icon: '📗',
+      title: tr('album'),
+      sub: tr('albumSub'),
+      accent: 'from-emerald-500/30',
+    },
+    {
+      href: '/progress',
+      icon: '🏆',
+      title: tr('progress'),
+      sub: tr('progressSub'),
+      accent: 'from-amber-500/30',
+    },
   ];
 
   return (

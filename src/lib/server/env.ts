@@ -12,10 +12,7 @@ import { hkdfSync } from 'node:crypto';
 export function databaseUrl(): string | null {
   // Vercel's Postgres/Neon integrations inject one of these.
   return (
-    process.env.DATABASE_URL ??
-    process.env.POSTGRES_URL ??
-    process.env.POSTGRES_PRISMA_URL ??
-    null
+    process.env.DATABASE_URL ?? process.env.POSTGRES_URL ?? process.env.POSTGRES_PRISMA_URL ?? null
   );
 }
 

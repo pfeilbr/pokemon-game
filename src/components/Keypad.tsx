@@ -76,12 +76,12 @@ export function Keypad({
   const keyClass =
     'tap flex items-center justify-center rounded-2xl bg-slate-800/90 text-3xl font-extrabold text-white ' +
     'ring-1 ring-white/10 transition-all active:scale-95 active:bg-slate-700 disabled:opacity-40 ' +
-    'hover:bg-slate-700/90 h-16 sm:h-[4.5rem]';
+    'hover:bg-slate-700/90 h-14 sm:h-[4.5rem]';
 
   return (
     <div className="w-full">
       <div
-        className="mb-3 flex h-20 w-full items-center justify-center rounded-2xl bg-slate-950/70 px-4 ring-2 ring-white/15"
+        className="mb-2 flex h-16 w-full sm:mb-3 sm:h-20 items-center justify-center rounded-2xl bg-slate-950/70 px-4 ring-2 ring-white/15"
         aria-live="polite"
       >
         <span
@@ -145,7 +145,7 @@ export function Keypad({
         onClick={submit}
         disabled={disabled || value.length === 0}
         data-testid="submit-answer"
-        className="tap mt-3 w-full rounded-2xl bg-gradient-to-b from-emerald-400 to-emerald-600 px-6 py-5 text-3xl font-black text-white shadow-[0_6px_0_0_#065f46] transition-all active:translate-y-[3px] active:shadow-[0_3px_0_0_#065f46] disabled:opacity-40 disabled:shadow-none"
+        className="tap mt-3 w-full rounded-2xl bg-gradient-to-b from-emerald-400 to-emerald-600 px-6 py-4 text-3xl font-black sm:py-5 text-white shadow-[0_6px_0_0_#065f46] transition-all active:translate-y-[3px] active:shadow-[0_3px_0_0_#065f46] disabled:opacity-40 disabled:shadow-none"
       >
         {submitLabel}
       </button>

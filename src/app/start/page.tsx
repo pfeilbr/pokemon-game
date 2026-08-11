@@ -97,7 +97,9 @@ export default function StartPage() {
                   }}
                 >
                   <CreatureArt creature={creature} size={96} animate={selected} />
-                  <span className="text-base font-extrabold text-white">{creature.name[language]}</span>
+                  <span className="text-base font-extrabold text-white">
+                    {creature.name[language]}
+                  </span>
                   <ElementChip element={creature.element} size="sm" label={style.label[language]} />
                 </button>
               );

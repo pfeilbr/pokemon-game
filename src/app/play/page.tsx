@@ -55,7 +55,9 @@ export default function PlayPage() {
 
   // Deterministic per battle so a refresh does not reroll the choices, but it
   // changes as the player levels and after each fight.
-  const rng = createRng(`${profile.trainerName}:${profile.battlesWon + profile.battlesLost}:${level}`);
+  const rng = createRng(
+    `${profile.trainerName}:${profile.battlesWon + profile.battlesLost}:${level}`,
+  );
   const pool = availableAtLevel(level).filter((c) => c.id !== partner.id);
   const opponents = rng.shuffle(pool).slice(0, OPPONENT_COUNT);
 
@@ -103,7 +105,9 @@ export default function PlayPage() {
                   setOpponentId(foe.id);
                 }}
                 className="panel flex flex-col items-center gap-2 p-4 transition-transform active:scale-[0.97]"
-                style={{ background: `linear-gradient(160deg, ${style.color}22, rgba(19,28,51,0.9))` }}
+                style={{
+                  background: `linear-gradient(160deg, ${style.color}22, rgba(19,28,51,0.9))`,
+                }}
               >
                 <CreatureArt creature={foe} size={104} animate={false} />
                 <span className="text-lg font-extrabold text-white">{foe.name[language]}</span>

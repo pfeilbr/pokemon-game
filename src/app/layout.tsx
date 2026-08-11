@@ -4,7 +4,8 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Mathmon Battle League',
-  description: 'Catch monsters, win battles, and get faster at maths. A maths-powered creature battler for kids.',
+  description:
+    'Catch monsters, win battles, and get faster at maths. A maths-powered creature battler for kids.',
   applicationName: 'Mathmon',
   appleWebApp: { capable: true, title: 'Mathmon', statusBarStyle: 'black-translucent' },
   manifest: '/manifest.webmanifest',

@@ -7,7 +7,8 @@
  * soundtrack under 100 lines.
  */
 
-export type Cue = 'tap' | 'correct' | 'wrong' | 'hit' | 'crit' | 'win' | 'lose' | 'catch' | 'levelUp';
+export type Cue =
+  'tap' | 'correct' | 'wrong' | 'hit' | 'crit' | 'win' | 'lose' | 'catch' | 'levelUp';
 
 type Note = { freq: number; at: number; duration: number; type?: OscillatorType; gain?: number };
 

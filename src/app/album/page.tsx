@@ -73,11 +73,18 @@ export default function AlbumPage() {
                       className="panel flex flex-col items-center gap-1 p-3 transition-transform active:scale-[0.97]"
                       style={
                         has
-                          ? { background: `linear-gradient(160deg, ${style.color}1f, rgba(19,28,51,0.9))` }
+                          ? {
+                              background: `linear-gradient(160deg, ${style.color}1f, rgba(19,28,51,0.9))`,
+                            }
                           : undefined
                       }
                     >
-                      <CreatureArt creature={creature} size={72} animate={false} silhouette={!has} />
+                      <CreatureArt
+                        creature={creature}
+                        size={72}
+                        animate={false}
+                        silhouette={!has}
+                      />
                       <span
                         className={`text-center text-xs leading-tight font-bold ${has ? 'text-white' : 'text-slate-600'}`}
                       >

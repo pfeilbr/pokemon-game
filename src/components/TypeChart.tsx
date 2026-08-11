@@ -25,7 +25,10 @@ export function TypeChart({ language, highlight }: { language: Language; highlig
             }`}
             style={{ background: `${style.color}14`, border: `1px solid ${style.color}33` }}
           >
-            <span className="flex w-24 shrink-0 items-center gap-1.5 font-extrabold" style={{ color: style.color }}>
+            <span
+              className="flex w-24 shrink-0 items-center gap-1.5 font-extrabold"
+              style={{ color: style.color }}
+            >
               <span aria-hidden>{style.icon}</span>
               {style.label[language]}
             </span>

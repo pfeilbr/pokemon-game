@@ -76,7 +76,11 @@ export function ElementChip({
         'inline-flex items-center gap-1.5 rounded-full font-bold whitespace-nowrap',
         size === 'sm' ? 'px-2.5 py-1 text-xs' : 'px-3 py-1.5 text-sm',
       ].join(' ')}
-      style={{ background: `${style.color}22`, color: style.color, border: `1px solid ${style.color}66` }}
+      style={{
+        background: `${style.color}22`,
+        color: style.color,
+        border: `1px solid ${style.color}66`,
+      }}
     >
       <span aria-hidden>{style.icon}</span>
       {label ?? style.label.en}
@@ -120,7 +124,10 @@ export function HealthBar({
       >
         <div
           className="h-full rounded-full transition-[width] duration-500 ease-out"
-          style={{ width: `${ratio * 100}%`, background: `linear-gradient(90deg, ${colour}, ${colour}cc)` }}
+          style={{
+            width: `${ratio * 100}%`,
+            background: `linear-gradient(90deg, ${colour}, ${colour}cc)`,
+          }}
         />
       </div>
     </div>
@@ -145,7 +152,15 @@ export function XpBar({ into, span, level }: { into: number; span: number; level
   );
 }
 
-export function ChargeMeter({ charge, max, label }: { charge: number; max: number; label: string }) {
+export function ChargeMeter({
+  charge,
+  max,
+  label,
+}: {
+  charge: number;
+  max: number;
+  label: string;
+}) {
   return (
     <div className="flex items-center gap-2">
       <span className="text-xs font-bold tracking-wide text-slate-300 uppercase">{label}</span>
@@ -179,7 +194,9 @@ export function Stat({ label, value, icon }: { label: string; value: ReactNode; 
         </span>
       )}
       <span className="text-xl leading-none font-extrabold text-white sm:text-2xl">{value}</span>
-      <span className="text-[11px] leading-tight font-semibold text-slate-400 uppercase">{label}</span>
+      <span className="text-[11px] leading-tight font-semibold text-slate-400 uppercase">
+        {label}
+      </span>
     </div>
   );
 }

@@ -31,7 +31,12 @@ function fresh(overrides: Partial<typeof setup> = {}): BattleState {
 }
 
 /** Plays one full turn. `correct` decides whether the answer is right. */
-function playTurn(state: BattleState, moveId: string, correct: boolean, elapsedMs = 2000): BattleState {
+function playTurn(
+  state: BattleState,
+  moveId: string,
+  correct: boolean,
+  elapsedMs = 2000,
+): BattleState {
   let next = battleReducer(state, { type: 'chooseMove', moveId, now: 0 });
   if (next.phase !== 'solving') return next;
   const answer = correct ? next.problem!.answer : next.problem!.answer + 1;
@@ -136,7 +141,9 @@ describe('turn flow', () => {
     expect(battleReducer(s, { type: 'continue' })).toBe(s);
 
     const solving = battleReducer(s, { type: 'chooseMove', moveId: 'ember-quick', now: 0 });
-    expect(battleReducer(solving, { type: 'chooseMove', moveId: 'ember-strong', now: 0 })).toBe(solving);
+    expect(battleReducer(solving, { type: 'chooseMove', moveId: 'ember-strong', now: 0 })).toBe(
+      solving,
+    );
   });
 
   it('holds the opponent back on turn one so the player always opens', () => {
@@ -357,7 +364,11 @@ describe('endgame', () => {
     expect(caught.phase).toBe('victory');
     expect(caught.log.some((l) => l.kind === 'caught')).toBe(true);
 
-    const missed = battleReducer(timed, { type: 'answer', value: timed.problem!.answer + 1, now: 500 });
+    const missed = battleReducer(timed, {
+      type: 'answer',
+      value: timed.problem!.answer + 1,
+      now: 500,
+    });
     expect(missed.caught).toBe(false);
     expect(missed.log.some((l) => l.kind === 'escaped')).toBe(true);
   });
@@ -460,6 +471,29 @@ describe('difficulty balance', () => {
           }),
         );
         expect(s.outcome, `${player.id} vs ${foe.id}`).toBe('win');
+      }
+    }
+  });
+
+  /**
+   * A brand-new trainer picks their first opponent with no charge banked and
+   * the lowest stats in the game. Every matchup on offer at level 1 has to be
+   * winnable, or a child's first ever battle can be an unavoidable loss.
+   */
+  it('lets a level-1 trainer win every matchup they can be offered', () => {
+    for (const player of stageOne) {
+      for (const foe of stageOne) {
+        const s = playSmart(
+          createBattle({
+            seed: `lv1-${player.id}-${foe.id}`,
+            playerCreatureId: player.id,
+            foeCreatureId: foe.id,
+            playerLevel: 1,
+            foeLevel: 1,
+            tier: 1,
+          }),
+        );
+        expect(s.outcome, `level 1: ${player.id} vs ${foe.id}`).toBe('win');
       }
     }
   });

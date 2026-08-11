@@ -23,16 +23,17 @@ import { createRng } from './rng';
  *    never penalised below the normal damage.
  */
 
-export type BattlePhase =
-  | 'choosing'
-  | 'solving'
-  | 'resolving'
-  | 'catching'
-  | 'victory'
-  | 'defeat';
+export type BattlePhase = 'choosing' | 'solving' | 'resolving' | 'catching' | 'victory' | 'defeat';
 
 export type LogEntry =
-  | { kind: 'playerHit'; turn: number; amount: number; moveId: string; multiplier: number; crit: boolean }
+  | {
+      kind: 'playerHit';
+      turn: number;
+      amount: number;
+      moveId: string;
+      multiplier: number;
+      crit: boolean;
+    }
   | { kind: 'playerGlance'; turn: number; amount: number; moveId: string; correctAnswer: number }
   | { kind: 'playerMend'; turn: number; amount: number }
   | { kind: 'foeHit'; turn: number; amount: number; multiplier: number }
@@ -282,7 +283,13 @@ export function battleReducer(state: BattleState, action: BattleAction): BattleS
 
     case 'continue': {
       if (state.phase !== 'resolving') return state;
-      return { ...state, phase: 'choosing', pendingMoveId: null, problem: null, problemShownAt: null };
+      return {
+        ...state,
+        phase: 'choosing',
+        pendingMoveId: null,
+        problem: null,
+        problemShownAt: null,
+      };
     }
 
     default:
@@ -316,7 +323,10 @@ function resolveTurn(
     // A missed heal still restores a little, so spending charge is never a
     // total loss.
     const ratio = correct ? move.power / 100 : (move.power / 100) * GLANCE_MULTIPLIER;
-    const healed = Math.min(player.maxHp - player.hp, Math.max(1, Math.round(player.maxHp * ratio)));
+    const healed = Math.min(
+      player.maxHp - player.hp,
+      Math.max(1, Math.round(player.maxHp * ratio)),
+    );
     player = { ...player, hp: player.hp + healed };
     log.push({ kind: 'playerMend', turn: state.turn, amount: healed });
   } else {
@@ -381,7 +391,12 @@ function resolveTurn(
   if (state.turn > 1) {
     const counter = foeDamage(base);
     player = { ...player, hp: Math.max(0, player.hp - counter.damage) };
-    log.push({ kind: 'foeHit', turn: state.turn, amount: counter.damage, multiplier: counter.multiplier });
+    log.push({
+      kind: 'foeHit',
+      turn: state.turn,
+      amount: counter.damage,
+      multiplier: counter.multiplier,
+    });
   }
 
   if (player.hp <= 0) {

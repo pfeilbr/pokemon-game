@@ -318,9 +318,7 @@ export function availableAtLevel(level: number): Creature[] {
 /** Walks the evolution line from any member back to its stage-1 root. */
 export function evolutionLine(id: string): Creature[] {
   const target = getCreature(id);
-  const root = CREATURES.find(
-    (c) => c.stage === 1 && c.element === target.element,
-  );
+  const root = CREATURES.find((c) => c.stage === 1 && c.element === target.element);
   if (!root) throw new Error(`No stage-1 creature for element ${target.element}`);
 
   const line: Creature[] = [root];

@@ -30,7 +30,14 @@ export const MAX_CHARGE = 3;
 /** Charge earned for a correct answer. */
 export const CHARGE_PER_CORRECT = 1;
 
-const ELEMENT_MOVE_NAMES: Record<Element, { quick: { en: string; zh: string }; strong: { en: string; zh: string }; special: { en: string; zh: string } }> = {
+const ELEMENT_MOVE_NAMES: Record<
+  Element,
+  {
+    quick: { en: string; zh: string };
+    strong: { en: string; zh: string };
+    special: { en: string; zh: string };
+  }
+> = {
   ember: {
     quick: { en: 'Cinder Flick', zh: '火星弹' },
     strong: { en: 'Flame Burst', zh: '烈焰爆' },

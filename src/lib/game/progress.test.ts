@@ -193,7 +193,9 @@ describe('badges', () => {
 
 describe('xpForBattle', () => {
   it('pays more for a win than a loss', () => {
-    expect(xpForBattle(summary({ won: true }))).toBeGreaterThan(xpForBattle(summary({ won: false })));
+    expect(xpForBattle(summary({ won: true }))).toBeGreaterThan(
+      xpForBattle(summary({ won: false })),
+    );
   });
 
   it('still pays something for a loss, so trying is never wasted', () => {
@@ -273,12 +275,16 @@ describe('createProfile', () => {
   });
 
   it('honours a language choice', () => {
-    expect(createProfile({ trainerName: 'Leo', starterId: 'zaplet', language: 'zh' }).settings.language).toBe('zh');
+    expect(
+      createProfile({ trainerName: 'Leo', starterId: 'zaplet', language: 'zh' }).settings.language,
+    ).toBe('zh');
   });
 
   it('refuses a starter that is not a stage-1 creature', () => {
     expect(() => createProfile({ trainerName: 'Leo', starterId: 'pyrolith' })).toThrow(/stage-1/);
-    expect(() => createProfile({ trainerName: 'Leo', starterId: 'nope' })).toThrow(/Unknown creature/);
+    expect(() => createProfile({ trainerName: 'Leo', starterId: 'nope' })).toThrow(
+      /Unknown creature/,
+    );
   });
 });
 
@@ -338,8 +344,18 @@ describe('applyBattleResult', () => {
 
   it('accumulates question counts and best combo', () => {
     let p = profile();
-    p = applyBattleResult(p, summary({ correct: 4, total: 5, bestCombo: 3 }), attempts, opts).profile;
-    p = applyBattleResult(p, summary({ correct: 5, total: 5, bestCombo: 7 }), attempts, opts).profile;
+    p = applyBattleResult(
+      p,
+      summary({ correct: 4, total: 5, bestCombo: 3 }),
+      attempts,
+      opts,
+    ).profile;
+    p = applyBattleResult(
+      p,
+      summary({ correct: 5, total: 5, bestCombo: 7 }),
+      attempts,
+      opts,
+    ).profile;
     expect(p.problemsCorrect).toBe(9);
     expect(p.problemsTotal).toBe(10);
     expect(p.bestCombo).toBe(7);
@@ -448,7 +464,10 @@ describe('normaliseProfile', () => {
   });
 
   it('drops duplicate album entries', () => {
-    const repaired = normaliseProfile({ starterId: 'cindik', caught: ['cindik', 'cindik', 'bublet'] })!;
+    const repaired = normaliseProfile({
+      starterId: 'cindik',
+      caught: ['cindik', 'cindik', 'bublet'],
+    })!;
     expect(repaired.caught).toEqual(['cindik', 'bublet']);
   });
 });

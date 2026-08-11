@@ -59,7 +59,9 @@ function LoginForm() {
     return (
       <Panel className="text-center">
         <p className="text-lg font-bold text-white">
-          {language === 'zh' ? '此部署未启用账号功能。' : 'Accounts are not enabled on this deployment.'}
+          {language === 'zh'
+            ? '此部署未启用账号功能。'
+            : 'Accounts are not enabled on this deployment.'}
         </p>
         <p className="mt-2 text-sm text-slate-400">
           {language === 'zh'

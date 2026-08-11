@@ -34,24 +34,54 @@
 }
 
 @keyframes pop {
-  0% { transform: scale(0.82); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
+  0% {
+    transform: scale(0.82);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 @keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  20% { transform: translateX(-9px); }
-  40% { transform: translateX(9px); }
-  60% { transform: translateX(-5px); }
-  80% { transform: translateX(5px); }
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-9px);
+  }
+  40% {
+    transform: translateX(9px);
+  }
+  60% {
+    transform: translateX(-5px);
+  }
+  80% {
+    transform: translateX(5px);
+  }
 }
 @keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
 }
 @keyframes rise {
-  0% { transform: translateY(0) scale(0.8); opacity: 0; }
-  25% { opacity: 1; }
-  100% { transform: translateY(-70px) scale(1.25); opacity: 0; }
+  0% {
+    transform: translateY(0) scale(0.8);
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-70px) scale(1.25);
+    opacity: 0;
+  }
 }
 
 html,
@@ -64,8 +94,7 @@ body {
   font-family: var(--font-display);
   background:
     radial-gradient(1100px 700px at 12% -10%, #1e2f5c 0%, transparent 60%),
-    radial-gradient(900px 600px at 92% 8%, #3a1f5c 0%, transparent 55%),
-    var(--color-ink);
+    radial-gradient(900px 600px at 92% 8%, #3a1f5c 0%, transparent 55%), var(--color-ink);
   background-attachment: fixed;
 }
 

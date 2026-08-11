@@ -18,12 +18,17 @@ import {
   type BattleState,
   availableMoves,
   battleReducer,
-  beginCatch,
   createBattle,
   summarise,
 } from '@/lib/game/battle';
 import { MAX_CHARGE } from '@/lib/game/moves';
-import { type BattleOutcome, applyBattleResult, levelFromXp } from '@/lib/game/progress';
+import {
+  type BattleOutcome,
+  applyBattleResult,
+  badgeById,
+  levelFromXp,
+  partnerFor,
+} from '@/lib/game/progress';
 
 /**
  * The battle screen.
@@ -66,7 +71,6 @@ export function Battle({ playerCreatureId, opponentId, onExit, onRematch }: Prop
   );
 
   const [answer, setAnswer] = useState('');
-  const [flash, setFlash] = useState<'player' | 'foe' | null>(null);
   const [outcome, setOutcome] = useState<BattleOutcome | null>(null);
   const recorded = useRef(false);
 
@@ -106,23 +110,22 @@ export function Battle({ playerCreatureId, opponentId, onExit, onRematch }: Prop
     cue(summary.won ? 'win' : 'lose');
   }, [state, profile, update, cue]);
 
-  // Sound and shake feedback for whatever just happened.
+  // Sound for whatever just happened. The shake is derived below rather than
+  // held in state, so this effect only talks to the audio system.
   useEffect(() => {
     if (!lastEntry) return;
-    if (lastEntry.kind === 'playerHit') {
-      cue(lastEntry.crit ? 'crit' : 'hit');
-      setFlash('foe');
-    } else if (lastEntry.kind === 'playerGlance') {
-      cue('wrong');
-      setFlash('foe');
-    } else if (lastEntry.kind === 'foeHit') {
-      setFlash('player');
-    } else if (lastEntry.kind === 'caught') {
-      cue('catch');
-    }
-    const timer = setTimeout(() => setFlash(null), 420);
-    return () => clearTimeout(timer);
+    if (lastEntry.kind === 'playerHit') cue(lastEntry.crit ? 'crit' : 'hit');
+    else if (lastEntry.kind === 'playerGlance') cue('wrong');
+    else if (lastEntry.kind === 'caught') cue('catch');
   }, [lastEntry, cue]);
+
+  /** Which fighter just took a hit, derived straight from the battle log. */
+  const struck =
+    lastEntry?.kind === 'playerHit' || lastEntry?.kind === 'playerGlance'
+      ? 'foe'
+      : lastEntry?.kind === 'foeHit'
+        ? 'player'
+        : null;
 
   const submit = useCallback(() => {
     if (answer === '') return;
@@ -133,11 +136,14 @@ export function Battle({ playerCreatureId, opponentId, onExit, onRematch }: Prop
     setAnswer('');
   }, [answer, state.problem, cue]);
 
-  const chooseMove = (moveId: string) => {
-    cue('tap');
-    setAnswer('');
-    dispatch({ type: 'chooseMove', moveId, now: Date.now() });
-  };
+  const chooseMove = useCallback(
+    (moveId: string) => {
+      cue('tap');
+      setAnswer('');
+      dispatch({ type: 'chooseMove', moveId, now: Date.now() });
+    },
+    [cue],
+  );
 
   // ---- Rendering ---------------------------------------------------------
 
@@ -163,125 +169,171 @@ export function Battle({ playerCreatureId, opponentId, onExit, onRematch }: Prop
   const isCatch = state.phase === 'catching';
 
   return (
-    <div className="flex flex-col gap-3" data-testid="battle">
-      {/* Opponent */}
-      <Panel
-        className="relative overflow-hidden"
-        style={{ background: `linear-gradient(160deg, ${foeStyle.color}1f, rgba(19,28,51,0.92))` }}
-      >
-        <div className="flex items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="mb-1 flex items-center gap-2">
-              <span className="truncate font-extrabold text-white">{foe.name[language]}</span>
-              <ElementChip element={foe.element} size="sm" label={foeStyle.label[language]} />
-            </div>
-            <HealthBar current={state.foe.hp} max={state.foe.maxHp} />
-          </div>
-          <div className={flash === 'foe' ? 'animate-shake' : ''}>
-            <CreatureArt creature={foe} size={92} facing="left" animate={!flash} />
-          </div>
-        </div>
-        <MatchupHint attacker={player.element} defender={foe.element} />
-      </Panel>
-
-      {/* Message / problem */}
-      {solving && state.problem ? (
-        <div
-          className="panel flex flex-col items-center gap-1 py-5"
-          style={{ background: isCatch ? 'rgba(52,211,153,0.12)' : undefined }}
+    // Two columns once there is room, so a whole battle fits on screen without
+    // scrolling on a laptop. Stacked on a phone, where scrolling is natural.
+    <div
+      className="grid items-start gap-2 sm:gap-3 lg:grid-cols-[minmax(0,1fr)_22rem]"
+      data-testid="battle"
+    >
+      <div className="flex flex-col gap-2 sm:gap-3">
+        {/* Opponent */}
+        <Panel
+          className="relative overflow-hidden"
+          style={{
+            background: `linear-gradient(160deg, ${foeStyle.color}1f, rgba(19,28,51,0.92))`,
+          }}
         >
-          <span className="text-xs font-bold tracking-widest text-slate-400 uppercase">
-            {isCatch ? tr('catchPrompt') : tr('answer')}
-          </span>
-          <span
-            className="text-center text-5xl leading-tight font-black text-white sm:text-6xl"
-            data-testid="problem"
-          >
-            {state.problem.prompt}
-          </span>
-        </div>
-      ) : (
-        <BattleMessage state={state} />
-      )}
+          <div className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex items-center gap-2">
+                <span className="truncate font-extrabold text-white">{foe.name[language]}</span>
+                <ElementChip element={foe.element} size="sm" label={foeStyle.label[language]} />
+              </div>
+              <HealthBar current={state.foe.hp} max={state.foe.maxHp} />
+            </div>
+            <div key={state.log.length} className={struck === 'foe' ? 'animate-shake' : ''}>
+              <CreatureArt
+                creature={foe}
+                size={96}
+                facing="left"
+                animate
+                className="h-[68px] w-[68px] sm:h-24 sm:w-24"
+              />
+            </div>
+          </div>
+          <MatchupHint attacker={player.element} defender={foe.element} />
+        </Panel>
 
-      {/* Player */}
-      <Panel
-        style={{ background: `linear-gradient(160deg, ${playerStyle.color}1f, rgba(19,28,51,0.92))` }}
-      >
-        <div className="flex items-center gap-3">
-          <div className={flash === 'player' ? 'animate-shake' : ''}>
-            <CreatureArt creature={player} size={92} animate={!flash} />
+        {/* Message / problem */}
+        {solving && state.problem ? (
+          <div
+            className="panel flex flex-col items-center gap-0.5 py-3 sm:py-5"
+            style={{
+              background: isCatch ? 'rgba(52,211,153,0.12)' : undefined,
+            }}
+          >
+            <span className="text-xs font-bold tracking-widest text-slate-400 uppercase">
+              {isCatch ? tr('catchPrompt') : tr('answer')}
+            </span>
+            <span
+              className="text-center text-4xl leading-tight font-black text-white sm:text-6xl"
+              data-testid="problem"
+            >
+              {state.problem.prompt}
+            </span>
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="mb-1 flex items-center gap-2">
-              <span className="truncate font-extrabold text-white">{player.name[language]}</span>
-              <ElementChip element={player.element} size="sm" label={playerStyle.label[language]} />
+        ) : (
+          <BattleMessage state={state} />
+        )}
+
+        {/* Player */}
+        <Panel
+          style={{
+            background: `linear-gradient(160deg, ${playerStyle.color}1f, rgba(19,28,51,0.92))`,
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <div key={state.log.length} className={struck === 'player' ? 'animate-shake' : ''}>
+              <CreatureArt
+                creature={player}
+                size={96}
+                animate
+                className="h-[68px] w-[68px] sm:h-24 sm:w-24"
+              />
             </div>
-            <HealthBar current={state.player.hp} max={state.player.maxHp} />
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-              <ChargeMeter charge={state.charge} max={MAX_CHARGE} label={tr('charge')} />
-              {state.combo > 1 && (
-                <span className="animate-pop rounded-full bg-amber-400/20 px-3 py-1 text-sm font-black text-amber-300">
-                  {tr('combo')} ×{state.combo}
-                </span>
-              )}
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex items-center gap-2">
+                <span className="truncate font-extrabold text-white">{player.name[language]}</span>
+                <ElementChip
+                  element={player.element}
+                  size="sm"
+                  label={playerStyle.label[language]}
+                />
+              </div>
+              <HealthBar current={state.player.hp} max={state.player.maxHp} />
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                <ChargeMeter charge={state.charge} max={MAX_CHARGE} label={tr('charge')} />
+                {state.combo > 1 && (
+                  <span className="animate-pop rounded-full bg-amber-400/20 px-3 py-1 text-sm font-black text-amber-300">
+                    {tr('combo')} ×{state.combo}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      </Panel>
+        </Panel>
+      </div>
 
       {/* Action area */}
-      {state.phase === 'choosing' && (
-        <div className="grid grid-cols-2 gap-2.5">
-          {moves.map((move) => (
-            <button
-              key={move.id}
-              type="button"
-              disabled={!move.affordable}
-              onClick={() => chooseMove(move.id)}
-              data-testid={`move-${move.kind}`}
-              className={`tap flex flex-col items-start gap-0.5 rounded-2xl p-3.5 text-left ring-1 transition-all active:scale-[0.97] disabled:opacity-35 ${
-                move.kind === 'mend'
-                  ? 'bg-emerald-500/15 ring-emerald-400/40'
-                  : move.kind === 'special'
-                    ? 'bg-amber-400/15 ring-amber-300/50'
-                    : 'bg-white/5 ring-white/15'
-              }`}
-            >
-              <span className="text-base leading-tight font-extrabold text-white">
-                {move.name[language]}
-              </span>
-              <span className="text-xs leading-tight text-slate-400">{move.description[language]}</span>
-              {move.chargeCost > 0 && (
-                <span className="mt-1 text-xs font-bold text-amber-300">
-                  ⚡ {move.chargeCost}/{MAX_CHARGE}
+      <div className="flex flex-col gap-2 sm:gap-3">
+        {state.phase === 'choosing' && (
+          <div className="grid grid-cols-2 gap-2.5">
+            {moves.map((move) => (
+              <button
+                key={move.id}
+                type="button"
+                disabled={!move.affordable}
+                onClick={() => chooseMove(move.id)}
+                data-testid={`move-${move.kind}`}
+                className={[
+                  'tap flex flex-col items-start gap-0.5 rounded-2xl p-3.5 text-left ring-1',
+                  'transition-all active:scale-[0.97] disabled:opacity-35',
+                  move.kind === 'mend'
+                    ? 'bg-emerald-500/15 ring-emerald-400/40'
+                    : move.kind === 'special'
+                      ? 'bg-amber-400/15 ring-amber-300/50'
+                      : 'bg-white/5 ring-white/15',
+                  // The special is the answer to a bad matchup, so make it
+                  // impossible to miss the moment it is actually usable.
+                  move.chargeCost > 0 && move.affordable
+                    ? 'animate-pop ring-2 shadow-[0_0_18px_-2px_rgba(252,211,77,0.7)]'
+                    : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+              >
+                <span className="text-base leading-tight font-extrabold text-white">
+                  {move.name[language]}
                 </span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
+                <span className="text-xs leading-tight text-slate-400">
+                  {move.description[language]}
+                </span>
+                {move.chargeCost > 0 && (
+                  <span className="mt-1 text-xs font-bold text-amber-300">
+                    ⚡ {move.chargeCost}/{MAX_CHARGE}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
 
-      {solving && (
-        <Keypad
-          value={answer}
-          onChange={setAnswer}
-          onSubmit={submit}
-          submitLabel={isCatch ? tr('catchIt') : tr('submit')}
-          clearLabel={tr('clear')}
-          onKeyPress={() => cue('tap')}
-        />
-      )}
+        {solving && (
+          <Keypad
+            value={answer}
+            onChange={setAnswer}
+            onSubmit={submit}
+            submitLabel={isCatch ? tr('catchIt') : tr('submit')}
+            clearLabel={tr('clear')}
+            onKeyPress={() => cue('tap')}
+          />
+        )}
 
-      {state.phase === 'resolving' && (
-        <Button variant="secondary" full onClick={() => dispatch({ type: 'continue' })}>
-          {tr('continue')} →
-        </Button>
-      )}
+        {state.phase === 'resolving' && (
+          <Button
+            variant="secondary"
+            full
+            data-testid="continue-turn"
+            onClick={() => dispatch({ type: 'continue' })}
+          >
+            {tr('continue')} →
+          </Button>
+        )}
 
-      <button type="button" onClick={onExit} className="py-2 text-sm text-slate-500 underline">
-        {tr('back')}
-      </button>
+        <button type="button" onClick={onExit} className="py-2 text-sm text-slate-500 underline">
+          {tr('back')}
+        </button>
+      </div>
     </div>
   );
 }
@@ -293,7 +345,9 @@ function MatchupHint({ attacker, defender }: { attacker: Element; defender: Elem
 
   const good = multiplier === SUPER_EFFECTIVE;
   return (
-    <p className={`mt-2 text-center text-sm font-bold ${good ? 'text-emerald-400' : 'text-rose-400'}`}>
+    <p
+      className={`mt-2 text-center text-sm font-bold ${good ? 'text-emerald-400' : 'text-rose-400'}`}
+    >
       {good ? `✨ ${tr('superEffective')}` : `🛡️ ${tr('notVeryEffective')}`}
     </p>
   );
@@ -384,7 +438,9 @@ function VictoryScreen({
       {won && (
         <Panel className="w-full max-w-sm">
           <CreatureArt creature={foe} size={120} className="mx-auto" />
-          <p className={`mt-2 text-xl font-black ${summary.caught ? 'text-emerald-400' : 'text-slate-400'}`}>
+          <p
+            className={`mt-2 text-xl font-black ${summary.caught ? 'text-emerald-400' : 'text-slate-400'}`}
+          >
             {summary.caught ? `✨ ${tr('gotIt')}` : tr('itEscaped')}
           </p>
           <p className="text-sm text-slate-400">{foe.name[language]}</p>
@@ -414,16 +470,40 @@ function VictoryScreen({
         </p>
       )}
       {outcome?.evolved && (
-        <p className="animate-pop text-xl font-black text-sky-300">✨ {tr('evolvedInto')}!</p>
+        <p className="animate-pop text-xl font-black text-sky-300">
+          ✨ {getCreature(partnerFor(outcome.profile)).name[language]} — {tr('evolvedInto')}!
+        </p>
       )}
       {outcome && outcome.tierChanged > 0 && (
         <p className="animate-pop text-lg font-black text-emerald-300">🧠 {tr('mathLevelUp')}</p>
       )}
-      {outcome?.newBadges.map((id) => (
-        <p key={id} className="animate-pop text-lg font-black text-amber-300">
-          🏅 {tr('newBadge')}
-        </p>
-      ))}
+
+      {/* Name the badges rather than just announcing that some arrived. */}
+      {outcome && outcome.newBadges.length > 0 && (
+        <div className="flex w-full max-w-sm flex-col gap-2">
+          {outcome.newBadges.map((id) => {
+            const badge = badgeById(id);
+            if (!badge) return null;
+            return (
+              <div
+                key={id}
+                data-testid={`new-badge-${id}`}
+                className="animate-pop flex items-center gap-3 rounded-2xl bg-amber-400/15 p-3 text-left ring-2 ring-amber-300/50"
+              >
+                <span className="text-3xl" aria-hidden>
+                  {badge.icon}
+                </span>
+                <span>
+                  <span className="block text-xs font-bold text-amber-300 uppercase">
+                    {tr('newBadge')}
+                  </span>
+                  <span className="block font-extrabold text-white">{badge.name[language]}</span>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div className="flex w-full max-w-sm flex-col gap-2">
         <Button size="lg" full onClick={onRematch} data-testid="play-again">

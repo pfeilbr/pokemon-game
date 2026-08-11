@@ -35,14 +35,22 @@ export default function SettingsPage() {
 
   const setLanguage = (next: Language) => {
     cue('tap');
-    update((p) => ({ ...p, settings: { ...p.settings, language: next }, updatedAt: new Date().toISOString() }));
+    update((p) => ({
+      ...p,
+      settings: { ...p.settings, language: next },
+      updatedAt: new Date().toISOString(),
+    }));
   };
 
   const toggleSound = () => {
     const next = !profile.settings.sound;
     // Play the confirmation before muting, so turning sound ON is audible.
     if (next) cue('correct');
-    update((p) => ({ ...p, settings: { ...p.settings, sound: next }, updatedAt: new Date().toISOString() }));
+    update((p) => ({
+      ...p,
+      settings: { ...p.settings, sound: next },
+      updatedAt: new Date().toISOString(),
+    }));
   };
 
   return (

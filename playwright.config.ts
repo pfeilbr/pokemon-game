@@ -3,6 +3,13 @@ import { defineConfig, devices } from '@playwright/test';
 const PORT = Number(process.env.PORT ?? 3100);
 const baseURL = process.env.E2E_BASE_URL ?? `http://127.0.0.1:${PORT}`;
 
+/**
+ * Some sandboxes ship a Chromium build that predates the one this Playwright
+ * version downloads. PLAYWRIGHT_CHROMIUM_PATH points at the local binary in
+ * that case; unset, Playwright uses its own managed browser as usual.
+ */
+const executablePath = process.env.PLAYWRIGHT_CHROMIUM_PATH || undefined;
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
@@ -23,11 +30,15 @@ export default defineConfig({
   projects: [
     {
       name: 'desktop',
-      use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } },
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1280, height: 800 },
+        launchOptions: { executablePath },
+      },
     },
     {
       name: 'mobile',
-      use: { ...devices['Pixel 7'] },
+      use: { ...devices['Pixel 7'], launchOptions: { executablePath } },
     },
   ],
   webServer: process.env.E2E_BASE_URL

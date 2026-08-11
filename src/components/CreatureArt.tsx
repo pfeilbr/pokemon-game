@@ -81,7 +81,10 @@ function Crown({ spec }: { spec: ArtSpec }) {
             d="M50 4 C56 14 64 18 62 26 C60 33 52 34 50 34 C48 34 40 33 38 26 C36 18 44 14 50 4 Z"
             fill={accent}
           />
-          <path d="M50 14 C53 20 56 22 55 26 C54 30 51 30 50 30 C49 30 46 30 45 26 C44 22 47 20 50 14 Z" fill="#fff4d6" />
+          <path
+            d="M50 14 C53 20 56 22 55 26 C54 30 51 30 50 30 C49 30 46 30 45 26 C44 22 47 20 50 14 Z"
+            fill="#fff4d6"
+          />
         </g>
       );
     case 'leaf':
@@ -110,7 +113,9 @@ function Crown({ spec }: { spec: ArtSpec }) {
         </g>
       );
     case 'fin':
-      return <path d="M50 2 C58 12 62 20 60 30 L40 30 C38 20 42 12 50 2 Z" fill={accent} opacity={0.9} />;
+      return (
+        <path d="M50 2 C58 12 62 20 60 30 L40 30 C38 20 42 12 50 2 Z" fill={accent} opacity={0.9} />
+      );
     case 'horn':
       return (
         <g fill={accent}>
@@ -296,7 +301,13 @@ export function CreatureArt({
         <Eyes spec={spec} />
 
         {/* Mouth. */}
-        <path d="M45 63 q 5 5 10 0" stroke="#1c2333" strokeWidth={2.4} fill="none" strokeLinecap="round" />
+        <path
+          d="M45 63 q 5 5 10 0"
+          stroke="#1c2333"
+          strokeWidth={2.4}
+          fill="none"
+          strokeLinecap="round"
+        />
 
         {/* Cheeks. */}
         <ellipse cx={30} cy={60} rx={5} ry={3.4} fill="#ff8fa3" opacity={0.5} />

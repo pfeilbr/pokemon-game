@@ -100,7 +100,8 @@ export default function ProgressPage() {
                 const stat = profile.skillStats[skill]!;
                 const accuracy = accuracyOf(stat);
                 const pct = Math.round(accuracy * 100);
-                const colour = accuracy >= 0.8 ? '#34d399' : accuracy >= 0.5 ? '#fbbf24' : '#fb7185';
+                const colour =
+                  accuracy >= 0.8 ? '#34d399' : accuracy >= 0.5 ? '#fbbf24' : '#fb7185';
                 return (
                   <div key={skill} data-testid={`skill-${skill}`}>
                     <div className="mb-1 flex items-baseline justify-between gap-2 text-sm">

@@ -68,11 +68,18 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   // First load: read the device save immediately so play can start, then ask
   // the server whether there is a newer one to merge in.
+  //
+  // This has to be an effect rather than a lazy useState initialiser:
+  // localStorage does not exist during server rendering, so reading it during
+  // render would make the server and client markup disagree. Reading an
+  // external store on mount is the case the rule's own docs carve out, and the
+  // synchronous set here runs exactly once.
   useEffect(() => {
     let cancelled = false;
 
     const local = loadLocal();
     if (local) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setProfileState(local);
       latestProfile.current = local;
     }
@@ -104,26 +111,23 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const persist = useCallback(
-    (next: Profile, signedIn: boolean) => {
-      saveLocal(next);
-      latestProfile.current = next;
+  const persist = useCallback((next: Profile, signedIn: boolean) => {
+    saveLocal(next);
+    latestProfile.current = next;
 
-      if (!signedIn) {
-        setSyncState('local');
-        return;
-      }
+    if (!signedIn) {
+      setSyncState('local');
+      return;
+    }
 
-      setSyncState('saving');
-      if (pendingSync.current) clearTimeout(pendingSync.current);
-      pendingSync.current = setTimeout(() => {
-        const toPush = latestProfile.current;
-        if (!toPush) return;
-        void pushRemoteProfile(toPush).then((ok) => setSyncState(ok ? 'saved' : 'error'));
-      }, SYNC_DEBOUNCE_MS);
-    },
-    [],
-  );
+    setSyncState('saving');
+    if (pendingSync.current) clearTimeout(pendingSync.current);
+    pendingSync.current = setTimeout(() => {
+      const toPush = latestProfile.current;
+      if (!toPush) return;
+      void pushRemoteProfile(toPush).then((ok) => setSyncState(ok ? 'saved' : 'error'));
+    }, SYNC_DEBOUNCE_MS);
+  }, []);
 
   const update = useCallback(
     (fn: (profile: Profile) => Profile) => {
@@ -175,7 +179,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       await pushRemoteProfile(latestProfile.current);
     }
     await fetch('/api/auth/signout', { method: 'POST' }).catch(() => {});
-    setSession({ ...EMPTY_SESSION, accountsAvailable: session.accountsAvailable, googleAvailable: session.googleAvailable });
+    setSession({
+      ...EMPTY_SESSION,
+      accountsAvailable: session.accountsAvailable,
+      googleAvailable: session.googleAvailable,
+    });
     setSyncState('local');
   }, [session.signedIn, session.accountsAvailable, session.googleAvailable]);
 
@@ -190,9 +198,12 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener('visibilitychange', flush);
   }, [session.signedIn]);
 
-  useEffect(() => () => {
-    if (pendingSync.current) clearTimeout(pendingSync.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (pendingSync.current) clearTimeout(pendingSync.current);
+    },
+    [],
+  );
 
   const language: Language = profile?.settings.language ?? 'en';
   const soundOn = profile?.settings.sound ?? true;
@@ -211,7 +222,18 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       cue: (c: Cue) => play(c, soundOn),
       tr: (key: StringKey) => t(key, language),
     }),
-    [profile, loading, session, syncState, language, soundOn, update, setProfile, refreshSession, signOut],
+    [
+      profile,
+      loading,
+      session,
+      syncState,
+      language,
+      soundOn,
+      update,
+      setProfile,
+      refreshSession,
+      signOut,
+    ],
   );
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
