@@ -54,7 +54,6 @@ async function seedProfile(page: Page, overrides: Record<string, unknown> = {}) 
 }
 
 test.describe('screenshots', () => {
-  // The desktop viewport is the one used in the README.
   // Screenshots are captured once, at the desktop viewport used in the README.
   test.beforeEach(({}, testInfo) => {
     test.skip(testInfo.project.name !== 'desktop', 'captured on desktop only');
@@ -135,6 +134,8 @@ test.describe('screenshots', () => {
     await shot(page, '12-chinese');
   });
 
+  // Best captured against a server that has a database, so the shot shows the
+  // real form rather than the "accounts are not enabled" notice.
   test('sign in', async ({ page }) => {
     await seedProfile(page);
     await page.goto('/login');

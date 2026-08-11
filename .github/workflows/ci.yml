@@ -58,7 +58,15 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
-      - name: E2E tests
+      # This project promises two deployment shapes - a zero-config import that
+      # saves in the browser, and the same app with a database attached - so CI
+      # exercises both rather than assuming one.
+      - name: E2E tests (zero-config deployment, no database)
+        run: npm run test:e2e
+        env:
+          TEST_DATABASE_URL: ''
+
+      - name: E2E tests (with database and accounts)
         run: npm run test:e2e
 
       - name: Upload Playwright report on failure

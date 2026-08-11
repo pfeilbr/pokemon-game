@@ -205,7 +205,9 @@ test.describe('settings', () => {
   });
 });
 
-test.describe('deployment without a database', () => {
+test.describe('playing without an account', () => {
+  // True of every deployment: a player who has not signed in keeps their
+  // progress on the device and can play the whole game.
   test('reports local-only saving and still plays', async ({ page }) => {
     await createTrainer(page);
     const status = page.getByTestId('sync-status');
@@ -214,6 +216,17 @@ test.describe('deployment without a database', () => {
       await expect(status).toContainText(/this device/i);
     }
     await expect(page.getByText('Leo')).toBeVisible();
+  });
+});
+
+test.describe('deployment without a database', () => {
+  // Only meaningful against a server that genuinely has no database - which is
+  // the zero-config Vercel import. CI runs the suite in both shapes.
+  test.beforeEach(async ({ page }) => {
+    const session = (await (await page.request.get('/api/session')).json()) as {
+      accountsAvailable: boolean;
+    };
+    test.skip(session.accountsAvailable, 'this deployment has a database attached');
   });
 
   test('the login page explains that accounts are off rather than erroring', async ({ page }) => {
