@@ -119,7 +119,7 @@ function LoginForm() {
         <p className="text-xs text-slate-500">{tr('pinHint')}</p>
 
         {error && (
-          <p className="font-semibold text-rose-400" role="alert">
+          <p className="font-semibold text-rose-400" role="alert" data-testid="login-error">
             {error}
           </p>
         )}

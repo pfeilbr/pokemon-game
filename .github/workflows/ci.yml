@@ -10,6 +10,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    # The account layer talks SQL, and SQL bugs only surface against a real
+    # database - which would otherwise be someone's Vercel project, after this
+    # had shipped.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mathmon_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/mathmon_test?sslmode=disable
+
     steps:
       - uses: actions/checkout@v4
 
@@ -29,7 +49,7 @@ jobs:
       - name: Format check
         run: npm run format:check
 
-      - name: Unit tests
+      - name: Unit tests (includes Postgres integration tests)
         run: npm test
 
       - name: Build

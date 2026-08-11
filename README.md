@@ -173,6 +173,19 @@ npm run test:e2e     # 44 E2E tests across desktop + mobile viewports
 npm run test:all     # typecheck + unit + E2E
 ```
 
+The account layer talks SQL, so it is covered by integration tests against a
+real Postgres rather than by mocks. They skip themselves unless you offer a
+database, which keeps the default run dependency-free:
+
+```bash
+export TEST_DATABASE_URL='postgres://postgres@127.0.0.1:5432/postgres?sslmode=disable'
+npm test             # +18 Postgres integration tests
+npm run test:e2e     # +8 signed-in browser tests, incl. cross-device sync
+```
+
+CI runs both, so the sign-in path is verified before it ever reaches a real
+deployment.
+
 ---
 
 ## How it is built
@@ -205,7 +218,9 @@ Two real design bugs were caught that way and are now regression-guarded:
 The E2E tests genuinely play the game: they read each question off the screen,
 work out the answer independently of the game's own generator, and tap it in on
 the keypad. The screenshots above are captured by that same suite, so they
-cannot drift from the real UI.
+cannot drift from the real UI. The signed-in path is exercised against a real
+Postgres, up to and including logging in on a second browser context and
+finding the badge earned on the first.
 
 See [CLAUDE.md](CLAUDE.md) for architecture and contribution notes.
 

@@ -30,6 +30,21 @@ npm run screenshots  # regenerate docs/screenshots/
 In a sandbox whose bundled Chromium predates this Playwright version, set
 `PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium`.
 
+### Testing the database path
+
+The account layer talks SQL, so it is covered by integration tests rather than
+mocks. They skip themselves unless a database is offered, which keeps
+`npm test` dependency-free:
+
+```bash
+export TEST_DATABASE_URL='postgres://postgres@127.0.0.1:5432/postgres?sslmode=disable'
+npm test          # adds 18 Postgres integration tests
+npm run test:e2e  # adds 8 signed-in browser tests, incl. cross-device sync
+```
+
+Without it, the suite exercises the zero-config (local-only) deployment, which
+is what a default Vercel import actually runs. CI runs both.
+
 ## Architecture
 
 The hard rule: **all game rules live in `src/lib/game/` as pure, deterministic,

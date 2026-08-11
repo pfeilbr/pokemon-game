@@ -48,6 +48,12 @@ export default defineConfig({
         url: baseURL,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
-        env: { AUTH_SECRET: 'e2e-test-secret-not-for-production-use-0123456789' },
+        env: {
+          AUTH_SECRET: 'e2e-test-secret-not-for-production-use-0123456789',
+          // Handed through only when a test database is offered, so the default
+          // run exercises the zero-config (local-only) deployment and the
+          // account specs skip themselves.
+          ...(process.env.TEST_DATABASE_URL ? { DATABASE_URL: process.env.TEST_DATABASE_URL } : {}),
+        },
       },
 });
