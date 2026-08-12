@@ -8,6 +8,10 @@ A creature-collecting card battler where every attack is powered by solving a
 maths problem — built for a smart seven-year-old who likes trading cards, plays
 chess, and is good at numbers.
 
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/import/git?s=https://github.com/pfeilbr/pokemon-game)
+
+One click, no environment variables, no configuration.
+
 </div>
 
 ---
@@ -125,10 +129,13 @@ Optional, and only offered when the deployment has a database attached.
 The app runs with **no environment variables at all**, so this is genuinely a
 two-minute job.
 
-1. Go to [vercel.com/new](https://vercel.com/new) and **Import** `pokemon-game`
-   from GitHub.
-2. Accept every default and click **Deploy**.
-3. Open the URL and play.
+**[→ Import this repo into Vercel](https://vercel.com/import/git?s=https://github.com/pfeilbr/pokemon-game)** —
+opens the import screen with the repository already filled in. Click **Deploy**,
+then open the URL and play.
+
+That link imports _this_ repository, so every later push redeploys
+automatically. (The generic [vercel.com/new](https://vercel.com/new) works too;
+just pick `pokemon-game` from the list.)
 
 With no configuration, progress saves in the browser on that device. That is a
 complete, playable game — accounts are an upgrade, not a requirement.
