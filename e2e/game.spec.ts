@@ -235,3 +235,43 @@ test.describe('deployment without a database', () => {
     await expect(page.getByText(/Accounts are not enabled/i)).toBeVisible();
   });
 });
+
+test.describe('speed bonus', () => {
+  test('shows the bonus draining while a question is on screen', async ({ page }) => {
+    await createTrainer(page);
+    await page.getByTestId('tile-play').click();
+    await page.locator('[data-testid^="opponent-"]').first().click();
+    await page.getByTestId('move-strong').click();
+
+    const meter = page.getByTestId('speed-meter');
+    await expect(meter).toBeVisible();
+    await expect(meter).toContainText(/Speed bonus/i);
+
+    // The bonus is a countdown, so it must be strictly smaller a moment later.
+    const readBonus = async () => {
+      const text = await meter.innerText();
+      const match = text.match(/\+(\d+)%/);
+      return match ? Number(match[1]) : 0;
+    };
+    const first = await readBonus();
+    expect(first).toBeGreaterThan(0);
+
+    await page.waitForTimeout(1200);
+    expect(await readBonus()).toBeLessThan(first);
+  });
+
+  /** Running the clock out must cost nothing - it is a bonus, not a timer. */
+  test('empties into an encouraging message rather than a penalty', async ({ page }) => {
+    await createTrainer(page);
+    await page.getByTestId('tile-play').click();
+    await page.locator('[data-testid^="opponent-"]').first().click();
+    await page.getByTestId('move-quick').click();
+
+    const meter = page.getByTestId('speed-meter');
+    await expect(meter).toContainText(/Take your time/i, { timeout: 20_000 });
+
+    // And a correct answer still lands normally afterwards.
+    await answerCurrentProblem(page);
+    await expect(page.getByText(/Correct!/)).toBeVisible();
+  });
+});

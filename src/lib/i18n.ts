@@ -52,6 +52,8 @@ export const STRINGS = {
   submit: { en: 'Go!', zh: '确定！' },
   clear: { en: 'Clear', zh: '清除' },
   correct: { en: 'Correct!', zh: '答对了！' },
+  speedBonus: { en: 'Speed bonus', zh: '速度加成' },
+  takeYourTime: { en: 'Take your time', zh: '慢慢来' },
   wrong: { en: 'Not quite', zh: '差一点' },
   theAnswerWas: { en: 'The answer was', zh: '正确答案是' },
   superEffective: { en: 'Super effective!', zh: '效果拔群！' },

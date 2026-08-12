@@ -80,7 +80,10 @@ Pick a move — note the special glowing once the charge meter fills.
 ![Choosing a move](docs/screenshots/05-battle-choose-move.png)
 
 Then answer. The on-screen keypad means no OS keyboard ever covers the fight on
-a tablet, and it is why every answer in the game is a whole number.
+a tablet, and it is why every answer in the game is a whole number. The meter
+under the question is the speed bonus draining away — answer fast for extra
+damage and a critical hit. It is pure upside: when it empties it just says
+"take your time", and the hit lands normally.
 
 ![Solving a problem](docs/screenshots/06-battle-solving.png)
 

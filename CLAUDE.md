@@ -117,6 +117,14 @@ trying.
 **The opponent never attacks on turn one**, and answering slowly is never
 penalised below normal damage. Speed earns a bonus; slowness is not punished.
 
+**The speed meter is a bonus, not a timer.** The engine always paid up to +30%
+damage for a fast answer, but nothing showed it, so a child saw "Critical hit!"
+on some turns and "Correct!" on others with no idea why. The meter under the
+question drains in real time and names the bonus. When it empties it says "take
+your time" rather than counting down to a penalty - there is no timeout in the
+UI, and running the clock out costs nothing. Guarded by an E2E test that lets it
+empty and then checks a correct answer still lands normally.
+
 **Difficulty adapts on a rolling 8-attempt window** and moves one tier at a
 time. Promotion needs both accuracy _and_ comfort within par, so a lucky streak
 of easy questions cannot fling a child into fractions.

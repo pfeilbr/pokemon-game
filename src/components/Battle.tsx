@@ -15,10 +15,13 @@ import {
   effectiveness,
 } from '@/lib/game/elements';
 import {
+  CRIT_THRESHOLD,
+  MAX_SPEED_BONUS,
   type BattleState,
   availableMoves,
   battleReducer,
   createBattle,
+  speedFraction,
   summarise,
 } from '@/lib/game/battle';
 import { MAX_CHARGE } from '@/lib/game/moves';
@@ -221,6 +224,15 @@ export function Battle({ playerCreatureId, opponentId, onExit, onRematch }: Prop
             >
               {state.problem.prompt}
             </span>
+            {state.problemShownAt !== null && (
+              <div className="mt-2 w-full max-w-xs">
+                <SpeedMeter
+                  key={state.problemShownAt}
+                  startedAt={state.problemShownAt}
+                  parSeconds={state.problem.parTime}
+                />
+              </div>
+            )}
           </div>
         ) : (
           <BattleMessage state={state} />
@@ -333,6 +345,72 @@ export function Battle({ playerCreatureId, opponentId, onExit, onRematch }: Prop
         <button type="button" onClick={onExit} className="py-2 text-sm text-slate-500 underline">
           {tr('back')}
         </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The speed meter.
+ *
+ * The engine already pays up to +30% damage for a fast answer and flags a
+ * critical hit above a threshold, but none of that was visible - so a child saw
+ * "Critical hit!" some turns and "Correct!" others with no idea why. This shows
+ * the reward draining away in real time.
+ *
+ * Deliberately pure upside: when it empties nothing bad happens, the hit is
+ * simply normal, and the meter says so. Speed earns a bonus; slowness is never
+ * punished.
+ *
+ * Driven by an interval rather than a CSS transition on purpose. Reduced-motion
+ * users have transitions globally collapsed to ~0ms, which would snap this bar
+ * straight to empty and misinform them.
+ */
+function SpeedMeter({ startedAt, parSeconds }: { startedAt: number; parSeconds: number }) {
+  const { tr } = useGame();
+  const [fraction, setFraction] = useState(1);
+
+  // No reset needed here: the call site keys this component by `startedAt`, so
+  // each new question mounts a fresh meter already full.
+  useEffect(() => {
+    const id = setInterval(() => {
+      setFraction(speedFraction(Date.now() - startedAt, parSeconds));
+    }, 100);
+    return () => clearInterval(id);
+  }, [startedAt, parSeconds]);
+
+  // speedMultiplier = 1 + MAX_SPEED_BONUS * fraction, and a hit is critical at
+  // CRIT_THRESHOLD, so the crit zone is everything above this fraction.
+  const critFrom = (CRIT_THRESHOLD - 1) / MAX_SPEED_BONUS;
+  const bonusPercent = Math.round(MAX_SPEED_BONUS * fraction * 100);
+  const crit = fraction >= critFrom;
+
+  return (
+    <div className="w-full px-1" data-testid="speed-meter">
+      <div className="mb-1 flex items-baseline justify-between text-xs font-bold">
+        {bonusPercent > 0 ? (
+          <>
+            <span className={crit ? 'text-amber-300' : 'text-slate-300'}>
+              {crit ? '⚡ ' : ''}
+              {tr('speedBonus')}
+            </span>
+            <span className="font-mono text-slate-300">+{bonusPercent}%</span>
+          </>
+        ) : (
+          // No penalty here, and the wording makes that explicit.
+          <span className="text-slate-500">{tr('takeYourTime')}</span>
+        )}
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-900/80 ring-1 ring-white/10">
+        <div
+          className="h-full rounded-full"
+          style={{
+            width: `${fraction * 100}%`,
+            background: crit
+              ? 'linear-gradient(90deg,#fbbf24,#fde68a)'
+              : 'linear-gradient(90deg,#38bdf8,#7dd3fc)',
+          }}
+        />
       </div>
     </div>
   );
