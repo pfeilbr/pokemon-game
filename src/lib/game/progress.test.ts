@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BattleSummary } from './battle';
 import { CREATURES } from './creatures';
-import type { Attempt } from './math';
+import { ADAPT_WINDOW, MAX_TIER, type Attempt } from './math';
 import {
   BADGES,
   EVOLVE_AT,
@@ -382,6 +382,50 @@ describe('applyBattleResult', () => {
     }));
     const out = applyBattleResult(profile({ tier: 5 }), summary({ won: false }), bad, opts);
     expect(out.profile.tier).toBe(4);
+  });
+
+  it('clears the difficulty window when the tier changes', () => {
+    const fast: Attempt[] = Array.from({ length: 8 }, () => ({
+      skill: 'add1',
+      tier: 1,
+      correct: true,
+      elapsedMs: 900,
+    }));
+    const out = applyBattleResult(profile(), summary(), fast, opts);
+    expect(out.profile.tier).toBe(2);
+    // Evidence gathered at tier 1 says nothing about tier 2.
+    expect(out.profile.recentAttempts).toEqual([]);
+  });
+
+  /**
+   * The headline guarantee: a child on a hot streak cannot be vaulted from
+   * adding-to-20 into fractions. Each tier has to be earned on its own
+   * evidence, so climbing costs at least a full window per step.
+   *
+   * This is a regression test. The adapter used to carry the old window across
+   * a promotion, which meant a perfect player hit the maximum tier after just
+   * sixteen questions.
+   */
+  it('needs a full window of questions per tier, even for a perfect player', () => {
+    let p = profile();
+    let asked = 0;
+    const jumps: number[] = [];
+
+    while (p.tier < MAX_TIER && asked < 500) {
+      const before = p.tier;
+      const attempt: Attempt = { skill: 'add1', tier: before, correct: true, elapsedMs: 800 };
+      p = applyBattleResult(p, summary({ correct: 1, total: 1 }), [attempt], opts).profile;
+      asked += 1;
+      if (p.tier !== before) jumps.push(asked);
+    }
+
+    expect(p.tier).toBe(MAX_TIER);
+    // Nine promotions, none of them closer together than a full window.
+    expect(jumps).toHaveLength(MAX_TIER - 1);
+    for (let i = 1; i < jumps.length; i++) {
+      expect(jumps[i]! - jumps[i - 1]!).toBeGreaterThanOrEqual(ADAPT_WINDOW);
+    }
+    expect(asked).toBeGreaterThanOrEqual((MAX_TIER - 1) * ADAPT_WINDOW);
   });
 
   it('keeps only a bounded window of recent attempts', () => {

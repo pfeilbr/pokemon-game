@@ -358,8 +358,18 @@ export function applyBattleResult(
   const beforePartner = partnerFor(profile);
 
   const xpGained = xpForBattle(summary);
-  const recentAttempts = [...profile.recentAttempts, ...attempts].slice(-ADAPT_WINDOW);
-  const tier = nextTier(profile.tier, recentAttempts);
+  const observed = [...profile.recentAttempts, ...attempts].slice(-ADAPT_WINDOW);
+  const tier = nextTier(profile.tier, observed);
+
+  /**
+   * A tier change makes the window stale: every attempt in it was answered at
+   * the *previous* difficulty, so carrying it forward promotes again on the
+   * very next question. That is how a perfect run could climb from adding-to-20
+   * to two-step expressions in sixteen questions, which is the opposite of the
+   * gentle one-tier-at-a-time behaviour this adapter is supposed to have.
+   * Clearing it means each new tier has to be earned on its own evidence.
+   */
+  const recentAttempts = tier === profile.tier ? observed : [];
 
   const caught = [...profile.caught];
   if (summary.caught && !caught.includes(summary.creatureId)) caught.push(summary.creatureId);
