@@ -42,6 +42,24 @@ export async function verifyPin(pin: string, stored: string): Promise<boolean> {
   return timingSafeEqual(derived, expectedBuffer);
 }
 
+/**
+ * A stand-in hash for names that do not exist.
+ *
+ * `loginWithPin` used to return the moment the name missed, skipping the key
+ * derivation a wrong PIN pays for. The two answers were byte-identical and
+ * roughly 270x apart in time, which enumerates trainer names just as well as
+ * a different error message would - a slow answer means the child is real.
+ * Verifying the offered PIN against this decoy keeps the work symmetric.
+ *
+ * Derived once per process from random bytes, so no PIN can ever match it and
+ * the cost is paid on the first miss rather than on every one.
+ */
+let decoyHash: Promise<string> | null = null;
+function decoyPinHash(): Promise<string> {
+  decoyHash ??= hashPin(randomBytes(32).toString('hex'));
+  return decoyHash;
+}
+
 /** Trainer names are matched case- and space-insensitively. */
 export function nameKey(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -93,8 +111,12 @@ export async function loginWithPin(name: string, pin: string): Promise<AuthResul
   `;
   const trainer = rows[0];
   // Same answer whether the name exists or the PIN is wrong, so the endpoint
-  // cannot be used to enumerate trainer names.
-  if (!trainer?.pin_hash) return { ok: false, reason: 'mismatch' };
+  // cannot be used to enumerate trainer names - and the same amount of work,
+  // so the clock cannot be used to enumerate them either.
+  if (!trainer?.pin_hash) {
+    await verifyPin(pin, await decoyPinHash());
+    return { ok: false, reason: 'mismatch' };
+  }
 
   if (trainer.locked_until && trainer.locked_until.getTime() > Date.now()) {
     return { ok: false, reason: 'locked' };

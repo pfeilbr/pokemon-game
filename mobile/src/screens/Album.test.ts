@@ -1,6 +1,6 @@
-import { readFileSync } from 'node:fs';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { CREATURES, ELEMENTS, type Shape, drawCreature } from '../engine';
+import { groupByElement } from './Album';
 
 /**
  * The album screen: what it groups, and what that costs to draw.
@@ -15,46 +15,19 @@ import { CREATURES, ELEMENTS, type Shape, drawCreature } from '../engine';
  * missing creature in an album looks identical to one you have not caught yet.
  * So the test walks the real function the screen calls, not a copy of it.
  *
+ * That the *screen* draws what this function returns is the other half, and it
+ * lives in `Album.test.tsx`, which mounts it. This file used to check that by
+ * reading `Album.tsx` as text and looking for the words `groupByElement` and
+ * `CREATURES.map(` — a test that could not tell a rendered grouping from a
+ * mentioned one, and which a rename would have broken while the screen stayed
+ * correct. It was a stand-in for having no renderer; there is one now.
+ *
  * **Cost.** Every cell is an SVG built from `drawCreature`, and `art.ts` now
  * emits gradients, a rim shadow, an outline, texture, ears, wings and an aura.
  * 36 of those on one scrolling screen is the sort of thing that is fine until
  * it suddenly is not, and nobody notices which art feature pushed it over. The
  * bound below is a tripwire on that, measured rather than guessed.
  */
-
-// The screen is a React Native component; these are the platform modules it
-// pulls in on import. Vitest runs in `node`, where react-native's Flow source
-// will not parse — so they are stubbed to the surface the module body touches.
-// Nothing here stubs game logic: `groupByElement` under test is the real one.
-vi.mock('react-native', () => {
-  const identity = <T>(value: T): T => value;
-  return {
-    View: 'View',
-    Text: 'Text',
-    ScrollView: 'ScrollView',
-    Pressable: 'Pressable',
-    StyleSheet: { create: identity, flatten: identity },
-    Platform: { OS: 'ios', select: (options: Record<string, unknown>) => options.ios },
-  };
-});
-vi.mock('react-native-svg', () => new Proxy({}, { get: (_target, key) => String(key) }));
-vi.mock('expo-haptics', () => ({
-  impactAsync: async () => {},
-  notificationAsync: async () => {},
-  ImpactFeedbackStyle: {},
-  NotificationFeedbackType: {},
-}));
-vi.mock('@react-native-async-storage/async-storage', () => ({
-  default: {
-    getItem: async () => null,
-    setItem: async () => {},
-    removeItem: async () => {},
-  },
-}));
-
-const { groupByElement } = await import('./Album');
-
-const source = readFileSync(new URL('./Album.tsx', import.meta.url), 'utf8');
 
 /**
  * SVG nodes one `CreatureArt` mounts, counted the way the renderer builds it:
@@ -134,18 +107,6 @@ describe('the album groups the whole roster by element', () => {
 
     expect(groups.map((g) => g.element)).toEqual(['ember']);
     expect(groups[0]?.creatures).toHaveLength(emberOnly.length);
-  });
-
-  it('is what the screen actually renders from', () => {
-    // A grouping function nothing calls is worse than no grouping function:
-    // the tests above would stay green while the screen kept its flat wall.
-    expect(source).toContain('groupByElement');
-    expect(source, 'the flat grid is still there').not.toMatch(/CREATURES\.map\(/);
-  });
-
-  it('gives each group a header naming its element', () => {
-    expect(source).toContain('ElementChip');
-    expect(source).toMatch(/ELEMENT_STYLE\[\s*(group\.)?element\s*\]/);
   });
 });
 

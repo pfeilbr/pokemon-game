@@ -3,6 +3,9 @@ import { CREATURES, evolutionLine, findCreature, getCreature } from './creatures
 import {
   ADAPT_WINDOW,
   type Attempt,
+  MIN_TIER,
+  SKILLS,
+  type Skill,
   type SkillStats,
   clampTier,
   mergeSkillStats,
@@ -410,11 +413,119 @@ export function applyBattleResult(
 // ---------------------------------------------------------------------------
 
 /**
+ * The longest trainer name kept. A name is a child's nickname, not a document.
+ *
+ * This is a bound, not a style rule: `normaliseProfile` runs on the server for
+ * every `PUT /api/profile`, and without a cap a single request can park an
+ * arbitrarily large string in the database forever.
+ */
+export const MAX_TRAINER_NAME = 40;
+
+/** Longest string still considered a timestamp. Every ISO 8601 form fits. */
+const MAX_DATE_LENGTH = 40;
+
+/** The only shape `streak.lastPlayed` is ever written in. */
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+const SKILL_IDS = new Set<string>(SKILLS);
+
+/** A finite, non-negative number, or the fallback. */
+function num(value: unknown, fallback: number): number {
+  // `value + 0` turns -0 into 0 and leaves every other number alone. -0
+  // survives JSON.parse but not JSON.stringify, so leaving it in the profile
+  // means the value the server stores differs from the one it validated.
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value + 0 : fallback;
+}
+
+/**
+ * Keeps a timestamp only if it really is one.
+ *
+ * `reconcile` picks the cross-device winner with `Date.parse(updatedAt)`, so an
+ * unparseable timestamp does not fail loudly - it silently makes every
+ * comparison false and quietly stops the newer save from winning.
+ */
+function date(value: unknown, fallback: string): string {
+  return typeof value === 'string' &&
+    value.length <= MAX_DATE_LENGTH &&
+    Number.isFinite(Date.parse(value))
+    ? value
+    : fallback;
+}
+
+/**
+ * Rebuilds the rolling attempt window, keeping only attempts that describe a
+ * real question.
+ *
+ * Only `correct` used to be checked, so everything else in an attempt was
+ * whatever the caller sent: an unknown skill, a NaN tier, a 50KB string where
+ * the elapsed time goes. Those ride into storage and then into the stats
+ * screen, and NaN renders as "NaN" rather than crashing, which is worse - it is
+ * a bug nobody can see.
+ */
+function normaliseAttempts(input: unknown): Attempt[] {
+  if (!Array.isArray(input)) return [];
+  const out: Attempt[] = [];
+  for (const entry of input) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const a = entry as Record<string, unknown>;
+    if (typeof a.correct !== 'boolean') continue;
+    // A skill that no longer exists cannot be repaired into a real one, and
+    // inventing one would put words in the child's mouth. Drop it.
+    if (typeof a.skill !== 'string' || !SKILL_IDS.has(a.skill)) continue;
+    out.push({
+      skill: a.skill as Skill,
+      tier: clampTier(num(a.tier, MIN_TIER)),
+      correct: a.correct,
+      elapsedMs: num(a.elapsedMs, 0),
+    });
+  }
+  return out.slice(-ADAPT_WINDOW);
+}
+
+/**
+ * Rebuilds the per-skill stats from known skills and finite counters.
+ *
+ * This used to pass through whatever object arrived. That is a hole in the one
+ * function the server trusts: a hostile `PUT /api/profile` body could park
+ * arbitrary JSON in the saved profile - a `__proto__` key, a 10,000-deep tree
+ * that `JSON.stringify` cannot even serialise (so the save that comes back is
+ * unwritable to localStorage), or megabytes of string. Rebuilding from a fixed
+ * key list bounds the profile's shape *and* its size by construction.
+ */
+function normaliseSkillStats(input: unknown): SkillStats {
+  const out: SkillStats = {};
+  if (typeof input !== 'object' || input === null) return out;
+  const raw = input as Record<string, unknown>;
+  for (const skill of SKILLS) {
+    // hasOwnProperty, so a value inherited from a polluted prototype is not
+    // mistaken for saved data.
+    if (!Object.prototype.hasOwnProperty.call(raw, skill)) continue;
+    const stat = raw[skill];
+    if (typeof stat !== 'object' || stat === null) continue;
+    const s = stat as Record<string, unknown>;
+    out[skill] = {
+      attempts: num(s.attempts, 0),
+      correct: num(s.correct, 0),
+      totalMs: num(s.totalMs, 0),
+    };
+  }
+  return out;
+}
+
+/**
  * Repairs a profile loaded from storage.
  *
  * Save data outlives code. Anything missing, out of range or of the wrong type
  * is replaced with a sane default rather than allowed to crash the game - a
  * child losing his album to a schema change is not an acceptable failure.
+ *
+ * Three callers rely on this: localStorage on the web, AsyncStorage on iOS, and
+ * `PUT /api/profile`, where it is the only thing between a hostile request body
+ * and the database. So it is written as a rebuild, not a patch-up: every field
+ * of the returned profile is constructed here from a checked value, which is
+ * what makes it total (never throws), idempotent, and bounded in size.
+ * `progress.fuzz.test.ts` asserts those three properties over thousands of
+ * seeded hostile inputs.
  */
 export function normaliseProfile(input: unknown): Profile | null {
   if (typeof input !== 'object' || input === null) return null;
@@ -424,9 +535,6 @@ export function normaliseProfile(input: unknown): Profile | null {
     typeof raw.starterId === 'string' && findCreature(raw.starterId)?.stage === 1
       ? raw.starterId
       : 'cindik';
-
-  const num = (value: unknown, fallback: number): number =>
-    typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback;
 
   const caught = Array.isArray(raw.caught)
     ? raw.caught.filter((id): id is string => typeof id === 'string' && !!findCreature(id))
@@ -441,7 +549,9 @@ export function normaliseProfile(input: unknown): Profile | null {
   return {
     version: PROFILE_VERSION,
     trainerName:
-      typeof raw.trainerName === 'string' && raw.trainerName.trim() ? raw.trainerName : 'Trainer',
+      typeof raw.trainerName === 'string' && raw.trainerName.trim()
+        ? raw.trainerName.slice(0, MAX_TRAINER_NAME)
+        : 'Trainer',
     starterId,
     xp: num(raw.xp, 0),
     caught: [...new Set(caught)],
@@ -458,26 +568,26 @@ export function normaliseProfile(input: unknown): Profile | null {
     problemsTotal: num(raw.problemsTotal, 0),
     bestCombo: num(raw.bestCombo, 0),
     tier: clampTier(num(raw.tier, 1)),
-    recentAttempts: Array.isArray(raw.recentAttempts)
-      ? (
-          raw.recentAttempts.filter(
-            (a) =>
-              typeof a === 'object' && a !== null && typeof (a as Attempt).correct === 'boolean',
-          ) as Attempt[]
-        ).slice(-ADAPT_WINDOW)
-      : [],
-    skillStats: typeof raw.skillStats === 'object' && raw.skillStats !== null ? raw.skillStats : {},
+    recentAttempts: normaliseAttempts(raw.recentAttempts),
+    skillStats: normaliseSkillStats(raw.skillStats),
     streak: {
       current: num(streak.current, 0),
       best: num(streak.best, 0),
-      lastPlayed: typeof streak.lastPlayed === 'string' ? streak.lastPlayed : null,
+      // A corrupt date is a missing date: `updateStreak` starts a fresh streak
+      // rather than trusting a day it cannot parse.
+      lastPlayed:
+        typeof streak.lastPlayed === 'string' &&
+        ISO_DAY.test(streak.lastPlayed) &&
+        Number.isFinite(Date.parse(`${streak.lastPlayed}T00:00:00Z`))
+          ? streak.lastPlayed
+          : null,
     },
     settings: {
       language: settings.language === 'zh' ? 'zh' : 'en',
       sound: settings.sound !== false,
     },
-    createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : now,
-    updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : now,
+    createdAt: date(raw.createdAt, now),
+    updatedAt: date(raw.updatedAt, now),
   };
 }
 

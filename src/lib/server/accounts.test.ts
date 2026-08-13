@@ -1,9 +1,11 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { hashPin, isValidName, isValidPin, nameKey, verifyPin } from './accounts';
 
 /**
- * Covers the pure parts of the account layer. The database-backed functions are
- * exercised end-to-end by the E2E suite instead.
+ * Covers the pure parts of the account layer, including the shape and cost of
+ * a stored PIN hash. The lockout and name-enumeration properties need a real
+ * database and live in db.integration.test.ts, which owns the trainers table.
  */
 
 describe('PIN hashing', () => {
@@ -73,5 +75,34 @@ describe('validation', () => {
     expect(isValidName('')).toBe(false);
     expect(isValidName('   ')).toBe(false);
     expect(isValidName('x'.repeat(17))).toBe(false);
+  });
+});
+
+describe('stored hash shape', () => {
+  // A bare digest is the failure mode this guards: sha256 of a 4-digit PIN is
+  // 32 bytes and unsalted, so a rainbow table of all 10,000 PINs cracks the
+  // whole table at once. scrypt with a 16-byte salt and a 64-byte key is what
+  // CLAUDE.md promises, and the shape is the cheap part of that to assert.
+  it('is a 16-byte salt and a 64-byte derived key, not a bare digest', async () => {
+    const parts = (await hashPin('1234')).split(':');
+    expect(parts).toHaveLength(2);
+    expect(parts[0]).toMatch(/^[0-9a-f]{32}$/);
+    expect(parts[1]).toMatch(/^[0-9a-f]{128}$/);
+  });
+
+  it('gives two accounts with the same PIN different salts and different keys', async () => {
+    const [saltA, keyA] = (await hashPin('1234')).split(':');
+    const [saltB, keyB] = (await hashPin('1234')).split(':');
+    expect(saltA).not.toBe(saltB);
+    expect(keyA).not.toBe(keyB);
+  });
+
+  it('is slow enough to be a KDF rather than a hash', async () => {
+    // Not a precise cost assertion - just enough to catch scrypt being swapped
+    // for something instant. A bare sha256 lands around 0.01ms; scrypt at
+    // node's defaults is tens of ms. The floor is far below either boundary.
+    const started = performance.now();
+    await hashPin('1234');
+    expect(performance.now() - started).toBeGreaterThan(1);
   });
 });

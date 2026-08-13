@@ -95,7 +95,15 @@ export function CreatureArt({ creature, size = 128, facing = 'right', silhouette
       width={size}
       height={size}
       // react-native-svg has no CSS, so the mirror is a transform on the root.
-      style={facing === 'left' ? { transform: 'scaleX(-1)' } : undefined}
+      //
+      // Given as React Native's own transform array rather than a string. `Svg`
+      // merges `style` into its props and runs any string `transform` through
+      // an *SVG* transform parser, whose grammar is matrix/translate/scale/
+      // rotate/skew - it has no `scaleX`, and it throws rather than ignoring
+      // what it cannot read. `transform: 'scaleX(-1)'` therefore crashed the
+      // battle screen on the opponent's art, which is the only place this prop
+      // is used, and nothing caught it until the screen was rendered in a test.
+      style={facing === 'left' ? { transform: [{ scaleX: -1 }] } : undefined}
       accessibilityRole="image"
       accessibilityLabel={creature.name.en}
     >

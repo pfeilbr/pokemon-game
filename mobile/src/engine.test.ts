@@ -20,6 +20,19 @@ import {
  * the iOS client silently. These assertions fail loudly if the shared surface
  * this app depends on stops existing.
  */
+/**
+ * Removes comments before scanning for platform APIs.
+ *
+ * Without this the guard reads prose. It fired on a comment in `progress.ts`
+ * that ended a sentence with the word "document." - a false positive that would
+ * have been "fixed" by rewording English until a regex was happy, which is how a
+ * guard stops being taken seriously. The `[^:]` before `//` keeps the `//` in a
+ * URL from eating the rest of the line.
+ */
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+}
+
 describe('shared engine reaches the iOS client', () => {
   it('exposes the whole roster, not a copy of it', () => {
     // Twelve lines of three. If this ever disagrees with the web client, the
@@ -74,13 +87,15 @@ describe('shared engine reaches the iOS client', () => {
 
     for (const file of files) {
       const source = readFileSync(dir + file, 'utf8');
-      expect(source, `${file} imports a Node builtin`).not.toMatch(/from ['"]node:/);
+      const code = stripComments(source);
+
+      expect(code, `${file} imports a Node builtin`).not.toMatch(/from ['"]node:/);
       // Globals, not member access: a local named `sample` is fine, `window.x`
       // referring to the browser global is not.
-      expect(source, `${file} touches the DOM`).not.toMatch(
+      expect(code, `${file} touches the DOM`).not.toMatch(
         /(?:^|[^.\w])(?:document|window|localStorage|navigator)\s*\./,
       );
-      expect(source, `${file} uses Math.random`).not.toMatch(/Math\.random\(/);
+      expect(code, `${file} uses Math.random`).not.toMatch(/Math\.random\(/);
     }
   });
 });
