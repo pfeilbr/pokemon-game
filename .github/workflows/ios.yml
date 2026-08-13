@@ -146,6 +146,14 @@ jobs:
         working-directory: mobile/ios
         run: |
           set -o pipefail
+          # Release, not Debug. React Native's bundle script phase skips
+          # bundling entirely for a simulator Debug build, because it expects
+          # Metro to be serving on localhost. In CI nothing is serving, so a
+          # Debug build installs an app with no JavaScript in it: it launches,
+          # stays alive, and shows the "No script URL provided" redbox. That
+          # passed as green here once. Release embeds the Hermes bytecode
+          # bundle in the .app, which is also what ships.
+          #
           # Build against the booted device rather than a generic destination.
           # A generic destination builds every simulator arch including x86_64,
           # but these runners are Apple Silicon and React Native ships prebuilt
@@ -155,7 +163,7 @@ jobs:
           xcodebuild \
             -workspace "${{ steps.xcode.outputs.workspace }}" \
             -scheme "${{ steps.xcode.outputs.scheme }}" \
-            -configuration Debug \
+            -configuration Release \
             -destination "id=${{ steps.sim.outputs.udid }}" \
             -derivedDataPath build \
             ONLY_ACTIVE_ARCH=YES \
@@ -179,13 +187,24 @@ jobs:
           # Search only the configuration directory, one level deep. A wider
           # search also walks XCFrameworkIntermediates, and an empty result
           # silently became "/Info.plist" - which is what failed here before.
-          app=$(find build/Build/Products/Debug-iphonesimulator -maxdepth 1 -type d -name '*.app' 2>/dev/null | head -1)
+          app=$(find build/Build/Products/Release-iphonesimulator -maxdepth 1 -type d -name '*.app' 2>/dev/null | head -1)
           if [ -z "$app" ] || [ ! -f "$app/Info.plist" ]; then
             echo "::error::no built .app found under build/Build/Products"
             echo "Contents of build/Build/Products:"
             find build/Build/Products -maxdepth 3 -name '*.app' -o -maxdepth 2 -type d | head -40
             exit 1
           fi
+
+          # Without this the app launches into a redbox reading "No script URL
+          # provided" and every other assertion below still passes, because a
+          # redbox is the app running. Check the JavaScript is actually in the
+          # bundle before trusting anything the launch tells us.
+          if [ ! -f "$app/main.jsbundle" ]; then
+            echo "::error::$app contains no main.jsbundle - the app would launch with no JavaScript"
+            ls -la "$app" | head -30
+            exit 1
+          fi
+          echo "Embedded bundle: $(wc -c < "$app/main.jsbundle") bytes"
 
           bundle_id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
           echo "Launching $bundle_id from $app"
@@ -197,12 +216,22 @@ jobs:
           sleep 12
           xcrun simctl io "$udid" screenshot launch.png
 
-          # A crashed app leaves no running process; this is the real assertion.
+          # A crashed app leaves no running process. In a Release build there
+          # is no redbox to hide behind: an unhandled JS error or a bundle that
+          # fails to load is fatal, so surviving here means JS really ran.
           if ! xcrun simctl spawn "$udid" launchctl list | grep -q "$bundle_id"; then
             echo "::error::App is not running after launch - it crashed on startup"
             exit 1
           fi
           echo "App is running."
+
+      # The strongest assertion in this job: read the rendered pixels back. A
+      # redbox or a blank screen both leave a live process, so "it launched" is
+      # not evidence the app works. These strings can only appear if the shared
+      # engine resolved under Metro, ran under Hermes and rendered.
+      - name: Assert the shell actually rendered
+        working-directory: mobile/ios
+        run: swift ../scripts/assert-screenshot-text.swift launch.png "Mathmon" "Creatures loaded" "Element wheel balanced"
 
       - name: Upload launch screenshot
         if: always()

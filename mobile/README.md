@@ -63,10 +63,24 @@ a developer machine.
 
 **Today, with no credentials at all**, the `simulator` job on `macos-26` runs
 `expo prebuild`, `pod install` and `xcodebuild`, then boots a simulator to
-install, launch and screenshot the app. It asserts the process is still alive
-after launch, because a build that compiles but crashes on startup is not a
-passing build. The screenshot is uploaded as an artifact. Simulator builds need
-no Apple Developer account, so this is free and runs on every push.
+install, launch and screenshot the app. Simulator builds need no Apple
+Developer account, so this is free and runs on every push.
+
+Three things about that job are load-bearing, and each one was added after a
+green run that had proven nothing:
+
+- **It builds Release, not Debug.** React Native's bundle script phase skips
+  bundling for a simulator Debug build, because it assumes Metro is serving on
+  localhost. Nothing serves in CI, so a Debug build ships an app containing no
+  JavaScript. It installs, launches, stays alive, and displays the "No script
+  URL provided" redbox. Release embeds the Hermes bytecode bundle, which is
+  also what actually ships.
+- **It asserts `main.jsbundle` is inside the `.app`** before launching, which
+  is the direct guard against the above.
+- **It reads the pixels back.** `scripts/assert-screenshot-text.swift` runs
+  Vision OCR over the screenshot and requires the app's own strings to be on
+  it. "The process is still alive" is a weak claim: a redbox is alive, and so
+  is a blank screen. Only the OCR distinguishes *running* from *working*.
 
 The runner image matters: Expo SDK 57 ships a Swift package declaring
 `swift-tools-version 6.2`, so the build needs Xcode 26 or newer. On the
