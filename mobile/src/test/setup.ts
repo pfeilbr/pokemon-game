@@ -143,6 +143,37 @@ Object.defineProperties(globalThis, {
 });
 
 /**
+ * Finish React Native's circular core before any mock reaches into it.
+ *
+ * The mocked components subclass their real implementations through
+ * `jest.requireActual`, and the real `ScrollView` pulls in `Dimensions`, which
+ * reads `RCTDeviceEventEmitter.default` at module scope. Those modules import
+ * each other, so whichever one is entered first hands the other a
+ * half-initialised record - and which one that is depends on the order test
+ * files happen to load in.
+ *
+ * That made the suite green on a developer machine and red on CI, with
+ * `_RCTDeviceEventEmitter.default.addListener is not a function` thrown from
+ * inside a mock's own construction. Loading the emitter here, before any mock
+ * exists, means the cycle is always resolved the same way. It is ordering that
+ * is being fixed, not a missing mock: the emitter is deliberately the real one.
+ */
+for (const core of [
+  'react-native/Libraries/EventEmitter/RCTDeviceEventEmitter',
+  'react-native/Libraries/Utilities/Dimensions',
+]) {
+  try {
+    bypass = core;
+    require(core);
+  } catch {
+    // A future React Native may move or drop these. The suite should fail on a
+    // real assertion if that breaks something, not on a warm-up import.
+  } finally {
+    bypass = null;
+  }
+}
+
+/**
  * The two platform APIs this client substitutes for a web one, stood in for
  * here rather than in every test file.
  *
