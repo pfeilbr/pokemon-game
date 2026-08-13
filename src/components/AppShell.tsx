@@ -57,7 +57,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {profile && !session.signedIn && session.accountsAvailable && (
             <Link
               href="/login"
-              className="rounded-full bg-amber-400 px-4 py-2 text-sm font-extrabold text-slate-900"
+              className="tap inline-flex items-center justify-center rounded-full bg-amber-400 px-4 text-sm font-extrabold text-slate-900"
             >
               {tr('signInToSave')}
             </Link>

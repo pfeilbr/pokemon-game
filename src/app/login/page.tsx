@@ -134,7 +134,7 @@ function LoginForm() {
             setMode(mode === 'register' ? 'login' : 'register');
             setError(null);
           }}
-          className="py-1 text-sm text-slate-400 underline"
+          className="tap flex w-full items-center justify-center text-sm text-slate-400 underline"
         >
           {mode === 'register' ? tr('haveAccount') : tr('needAccount')}
         </button>

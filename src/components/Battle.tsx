@@ -342,7 +342,13 @@ export function Battle({ playerCreatureId, opponentId, onExit, onRematch }: Prop
           </Button>
         )}
 
-        <button type="button" onClick={onExit} className="py-2 text-sm text-slate-500 underline">
+        {/* Small type, but still a 56px target - it is the only way out of a
+            fight, and a seven-year-old's aim is worse than an adult's. */}
+        <button
+          type="button"
+          onClick={onExit}
+          className="tap flex w-full items-center justify-center text-sm text-slate-500 underline"
+        >
           {tr('back')}
         </button>
       </div>

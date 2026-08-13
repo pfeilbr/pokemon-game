@@ -16,7 +16,7 @@ import {
   weakTo,
 } from '../engine';
 import { useGame } from '../game/GameContext';
-import { colors, radius, space, tint } from '../theme';
+import { TAP, colors, radius, space, tint } from '../theme';
 import { CreatureArt } from '../ui/CreatureArt';
 import { Button, ElementChip, Panel } from '../ui/kit';
 
@@ -177,7 +177,15 @@ const styles = StyleSheet.create({
   foeName: { color: colors.text, fontSize: 19, fontWeight: '900' },
   verdict: { fontSize: 15, fontWeight: '800' },
   multipliers: { color: colors.faint, fontSize: 13 },
-  chartToggle: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  // Two lines of text come to about 34pt on their own, which is under TAP - a
+  // disclosure row is still a button, and this one is how a child looks up the
+  // element wheel mid-decision.
+  chartToggle: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    minHeight: TAP,
+  },
   chartTitle: { color: colors.text, fontSize: 17, fontWeight: '800' },
   chartSign: { color: colors.muted, fontSize: 24 },
   chartRow: {

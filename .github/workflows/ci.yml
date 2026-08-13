@@ -33,6 +33,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # README.md and CLAUDE.md both promise this repository ships no
+      # third-party image, font or audio assets and no trademarked names.
+      # Until this script existed that was enforced by good intentions alone -
+      # one dropped .png or one webfont <link> would have falsified it in
+      # silence. Runs first because it needs no dependencies and is instant.
+      - name: Asset and trademark audit
+        run: python3 scripts/audit_assets.py
+
+      # "Every tap target is at least 56px" is a promise made to a seven-year-old
+      # whose aim is worse than an adult's, and until this script existed nothing
+      # enforced it on either client - a new button with `py-2`, or a `Pressable`
+      # with no `minHeight`, broke it in silence. Also needs no dependencies.
+      - name: Accessibility audit (tap targets, names, reduced motion)
+        run: python3 scripts/audit_a11y.py
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22

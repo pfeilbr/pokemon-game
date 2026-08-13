@@ -216,10 +216,12 @@ drift between them. See [`mobile/README.md`](mobile/README.md).
 Next.js 16 (App Router) · React 19 · TypeScript (strict, `noUncheckedIndexedAccess`)
 · Tailwind CSS v4 · Postgres · Vitest · Playwright · Expo / React Native.
 
-**No image, font, or audio assets ship with this app.** All 36 creatures are
-procedurally drawn SVG generated from a data spec, and every sound effect is
-synthesised with the Web Audio API. Nothing is fetched at runtime, so the game
-loads instantly and works offline.
+**No third-party image, font, or audio assets ship with this app.** All 36
+creatures are procedurally drawn SVG generated from a data spec, and every sound
+effect is synthesised with the Web Audio API. The only image file anywhere
+outside the documentation screenshots is `public/icon.svg` — a 1.2 KB app icon,
+hand-written as vector primitives in this repository. Nothing is fetched at
+runtime, so the game loads instantly and works offline.
 
 The game rules live in `src/lib/game/` as pure, seeded, deterministic
 functions — no React, no clock, no I/O. Randomness comes from explicit seeds and
@@ -254,3 +256,47 @@ See [CLAUDE.md](CLAUDE.md) for architecture and contribution notes.
 This is a Pokémon-_style_ game, not a Pokémon game. Every creature, name and
 piece of art here is original and drawn by code in this repository. No Nintendo
 or The Pokémon Company assets, names, or trademarks are used or redistributed.
+
+### That claim is machine-checked
+
+It used to rest on good intentions, which is a poor place to rest a licensing
+promise — a single dropped `.png` or a webfont `<link>` would have falsified it
+silently and nobody would have noticed. It is now an enforced invariant:
+
+```bash
+python3 scripts/audit_assets.py          # exits non-zero on any violation
+python3 scripts/audit_assets.py --quiet  # findings and size census only
+```
+
+Standard library only, no dependencies, and it runs as the first step of
+[CI](.github/workflows/ci.yml) on every push and pull request. It checks four
+things across every tracked _and_ untracked-but-not-ignored file:
+
+- **No binary media** — images, audio, fonts or video — anywhere except
+  `docs/screenshots/` and `mobile/docs/`, which are documentation and reach no
+  player. `public/` and `mobile/assets/` are checked especially, because a file
+  there is not merely committed, it is served.
+- **No external asset host** referenced from code: Google Fonts, any `cdn.*`,
+  unpkg, jsDelivr, imgur, raw.githubusercontent and friends, plus any remote URL
+  ending in a media extension. A host named in a _comment_ is reported but
+  allowed; the same host in _code_ fails the build. The two are told apart with
+  a real string-and-comment scanner, because `const u = 'https://cdn…'` contains
+  a `//` and a naive check calls that a comment.
+- **No Nintendo or Pokémon trademarked name** in shipped source, from a list of
+  the first-generation creatures plus the company and franchise terms. The
+  report states its own exclusions: documentation is skipped (this very section
+  would otherwise fail the build), the repository's own `pokemon-game` slug is
+  masked, and lockfile `integrity` digests are ignored as base64 noise.
+- **A size census** of everything that ships, so "the art is geometry, not
+  assets" is a number you can check rather than a sentence you have to trust.
+  All 36 creatures cost about 60 KB of TypeScript, shared byte-for-byte by both
+  clients.
+
+The few deliberate exceptions — the app icon, and one test that names a
+trademarked creature in order to assert it is _absent_ from the roster — are
+recorded in the script with the reason, re-verified on every run, and printed in
+the report. An allowance is a stated claim, not a way to switch a check off.
+
+What it proves: no third-party asset file is committed here and the app fetches
+nothing at runtime. What it cannot prove: that hand-drawn geometry is not
+someone else's drawing. That part is still a human judgement.

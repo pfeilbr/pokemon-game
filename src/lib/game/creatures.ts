@@ -5,8 +5,10 @@ import { ELEMENTS, type Element } from './elements';
  *
  * Twelve evolution lines - two per element - of three stages each. Every
  * creature is original: the art is generated from the `art` spec below by
- * `art.ts`, so the game ships no third-party sprites, no image files and makes
- * no runtime image requests. Names carry a Chinese translation alongside
+ * `art.ts`, so the game ships no third-party sprites and makes no runtime image
+ * requests. The only image file outside the documentation screenshots is the
+ * app icon, which is hand-written vector primitives; `scripts/audit_assets.py`
+ * enforces that. Names carry a Chinese translation alongside
  * English because the player is bilingual.
  *
  * Two lines per element rather than one is what makes an album worth filling:

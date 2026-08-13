@@ -131,7 +131,7 @@ export default function PlayPage() {
           <button
             type="button"
             onClick={() => setShowChart((v) => !v)}
-            className="flex w-full items-center justify-between text-left"
+            className="tap flex w-full items-center justify-between text-left"
             aria-expanded={showChart}
           >
             <span className="text-lg font-bold text-white">🔄 {tr('typeChart')}</span>

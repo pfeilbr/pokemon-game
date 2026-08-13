@@ -5,7 +5,8 @@ import type { ArtSpec, Creature } from './creatures';
  *
  * Every creature in the game is drawn from its `ArtSpec` rather than loaded as
  * an image. That is not a shortcut - it is what makes the roster free to grow.
- * Thirty-six creatures cost about twelve kilobytes of geometry, no image
+ * Thirty-six creatures cost about sixty kilobytes of geometry (measured by
+ * `scripts/audit_assets.py`, so this number stays honest), no image
  * requests, no third-party sprites, no licence to track, and they stay sharp at
  * any size on any screen.
  *

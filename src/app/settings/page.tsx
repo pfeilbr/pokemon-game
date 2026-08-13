@@ -148,7 +148,7 @@ export default function SettingsPage() {
             <button
               type="button"
               onClick={() => setConfirmingReset(true)}
-              className="py-2 text-sm text-slate-500 underline"
+              className="tap flex w-full items-center justify-center text-sm text-slate-500 underline"
             >
               {language === 'zh' ? '重新开始' : 'Start over'}
             </button>
