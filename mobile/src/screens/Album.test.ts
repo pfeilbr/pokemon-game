@@ -27,7 +27,7 @@ import { CREATURES, ELEMENTS, type Shape, drawCreature } from '../engine';
 // will not parse — so they are stubbed to the surface the module body touches.
 // Nothing here stubs game logic: `groupByElement` under test is the real one.
 vi.mock('react-native', () => {
-  const identity = <T,>(value: T): T => value;
+  const identity = <T>(value: T): T => value;
   return {
     View: 'View',
     Text: 'Text',
