@@ -33,15 +33,20 @@ has grown a Node or browser dependency that would break under Hermes.
 
 ## What is native to this client
 
-Four things could not come across the seam, and each one is a deliberate
-substitution rather than a fork of a rule:
+The creature art crosses the seam too. `src/lib/game/art.ts` emits primitive
+shapes and gradients — no SVG, no DOM — and `src/ui/CreatureArt.tsx` is a
+~40-line mapper onto `react-native-svg`. The web client's renderer is the same
+forty lines against inline `<svg>`. Adding a creature or a new crown shape lands
+on both clients with no port and no image.
 
-| Web                         | iOS                            | Why                                                                                                                |
-| --------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| Inline `<svg>` creature art | `react-native-svg`             | Same viewBox, same path data, same `ArtSpec`. `src/ui/CreatureArt.test.ts` fails if a spec value loses its branch. |
-| `localStorage`              | `AsyncStorage`                 | Same key, same `normaliseProfile` repair at the boundary.                                                          |
-| Web Audio cues              | Taptic Engine (`expo-haptics`) | Reads better in one hand, and needs no audio assets — the "no bundled media" property survives.                    |
-| `prefers-reduced-motion`    | `AccessibilityInfo`            | iOS does not honour it for free; the hit shake asks explicitly.                                                    |
+Three things genuinely could not cross, and each is a substitution for a
+platform API rather than a fork of a rule:
+
+| Web                      | iOS                            | Why                                                                                           |
+| ------------------------ | ------------------------------ | --------------------------------------------------------------------------------------------- |
+| `localStorage`           | `AsyncStorage`                 | Same key, same `normaliseProfile` repair at the boundary.                                     |
+| Web Audio cues           | Taptic Engine (`expo-haptics`) | Reads better in one hand, and needs no audio assets — the no-bundled-media property survives. |
+| `prefers-reduced-motion` | `AccessibilityInfo`            | iOS does not honour it for free; the hit shake asks explicitly.                               |
 
 Navigation is a `switch` in `App.tsx`, not React Navigation. Six screens, no
 deep links, no back stack worth preserving — a navigation library would add two
@@ -132,7 +137,7 @@ GitHub macOS runner, from a Release build with the JavaScript bundle embedded.
 
 The game is complete and playable on the device:
 
-- **Sign-up** — trainer name, then the six starters on their own screen.
+- **Sign-up** — trainer name, then the twelve starters on their own screen.
 - **Dashboard** — partner in its current evolved form, XP bar, maths level,
   day streak, album completion.
 - **Opponent choice** — three level-appropriate opponents, each labelled with

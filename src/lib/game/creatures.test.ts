@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { ELEMENTS } from './elements';
 import {
   CREATURES,
+  LINES_PER_ELEMENT,
   availableAtLevel,
-  creaturesByElement,
   evolutionLine,
   findCreature,
   getCreature,
@@ -13,9 +13,9 @@ import {
 } from './creatures';
 
 describe('roster', () => {
-  it('holds one complete three-stage line per element', () => {
+  it('holds two complete three-stage lines per element', () => {
     expect(rosterIsComplete()).toBe(true);
-    expect(CREATURES).toHaveLength(ELEMENTS.length * 3);
+    expect(CREATURES).toHaveLength(ELEMENTS.length * LINES_PER_ELEMENT * 3);
   });
 
   it('gives every creature a unique id', () => {
@@ -43,8 +43,11 @@ describe('roster', () => {
   });
 
   it('makes later stages strictly stronger', () => {
-    for (const element of ELEMENTS) {
-      const line = creaturesByElement(element).sort((a, b) => a.stage - b.stage);
+    // Walked per line, not per element: two lines share an element now, so
+    // sorting an element's six creatures by stage interleaves them and compares
+    // a stage 1 against a stage 1.
+    for (const root of starters()) {
+      const line = evolutionLine(root.id);
       for (let i = 1; i < line.length; i++) {
         expect(line[i]!.baseHp).toBeGreaterThan(line[i - 1]!.baseHp);
         expect(line[i]!.baseAtk).toBeGreaterThan(line[i - 1]!.baseAtk);
@@ -86,11 +89,15 @@ describe('lookup helpers', () => {
     expect(findCreature('mewtwo')).toBeUndefined();
   });
 
-  it('offers exactly one starter per element', () => {
+  it('offers two starters per element, one per line', () => {
     const s = starters();
-    expect(s).toHaveLength(ELEMENTS.length);
-    expect(new Set(s.map((c) => c.element)).size).toBe(ELEMENTS.length);
+    expect(s).toHaveLength(ELEMENTS.length * LINES_PER_ELEMENT);
     expect(s.every((c) => c.stage === 1)).toBe(true);
+    // Every line contributes exactly one starter, and every element two.
+    expect(new Set(s.map((c) => c.lineId)).size).toBe(s.length);
+    for (const element of ELEMENTS) {
+      expect(s.filter((c) => c.element === element)).toHaveLength(LINES_PER_ELEMENT);
+    }
   });
 });
 
@@ -109,12 +116,32 @@ describe('evolutionLine', () => {
       expect(line.map((m) => m.id)).toContain(c.id);
     }
   });
+
+  it('never crosses into the other line of the same element', () => {
+    // The bug this guards: finding the root by element instead of by line sends
+    // every ember creature down whichever ember line happens to come first, so
+    // a Cinderpup would evolve into a Blazur.
+    for (const c of CREATURES) {
+      for (const member of evolutionLine(c.id)) {
+        expect(member.lineId).toBe(c.lineId);
+      }
+    }
+  });
+
+  it('gives the two lines of an element genuinely different members', () => {
+    for (const element of ELEMENTS) {
+      const [first, second] = starters().filter((c) => c.element === element);
+      const a = evolutionLine(first!.id).map((c) => c.id);
+      const b = evolutionLine(second!.id).map((c) => c.id);
+      expect(a.some((id) => b.includes(id))).toBe(false);
+    }
+  });
 });
 
 describe('availableAtLevel', () => {
   it('only offers starters to a brand-new trainer', () => {
     const wild = availableAtLevel(1);
-    expect(wild).toHaveLength(6);
+    expect(wild).toHaveLength(ELEMENTS.length * LINES_PER_ELEMENT);
     expect(wild.every((c) => c.stage === 1)).toBe(true);
   });
 

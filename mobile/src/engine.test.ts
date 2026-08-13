@@ -22,7 +22,9 @@ import {
  */
 describe('shared engine reaches the iOS client', () => {
   it('exposes the whole roster, not a copy of it', () => {
-    expect(CREATURES).toHaveLength(18);
+    // Twelve lines of three. If this ever disagrees with the web client, the
+    // two have stopped sharing a roster.
+    expect(CREATURES).toHaveLength(36);
     expect(getCreature('cindik').name.en).toBe('Cindik');
   });
 

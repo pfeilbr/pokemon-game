@@ -10,6 +10,8 @@
  * boundary; everything else in the app imports from here.
  */
 
+export { GRADIENT_REF, type Drawing, type Shape, drawCreature } from '../../src/lib/game/art';
+
 export {
   CREATURES,
   type ArtSpec,

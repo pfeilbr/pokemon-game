@@ -67,7 +67,8 @@ seeded functions.** React never decides anything about the game.
 src/lib/game/       The engine. Pure. No React, no I/O, no Date.now, no Math.random.
   rng.ts            Seeded mulberry32.
   elements.ts       The six-element wheel.
-  creatures.ts      The 18-creature roster + art specs.
+  creatures.ts      The 36-creature roster (12 lines) + art specs.
+  art.ts            Creature geometry as data. Pure; no SVG, no DOM.
   moves.ts          The four-slot move kit.
   math.ts           Problem generation + adaptive difficulty.
   battle.ts         The battle state machine (a reducer).
@@ -95,8 +96,14 @@ or browser dependency that would break under Hermes.
 So: a rule change belongs in `src/lib/game/` and lands on both clients at once.
 Never fork a rule into a client.
 
-What the iOS client does own is presentation, and four things it cannot share:
-`react-native-svg` in place of inline `<svg>` (same viewBox, same path data),
+The creature art is shared the same way the rules are. `art.ts` emits a
+`Drawing` — primitive shapes and gradients, no SVG and no DOM — and each client
+has a ~40-line renderer that maps a primitive onto its own surface. The geometry
+used to be written out once per client and hand-ported, which made "this
+creature quietly lost its crown on iOS" a real and invisible bug, because a
+missing branch draws nothing and nothing looks like art.
+
+What the iOS client does own is presentation, and three things it cannot share:
 `AsyncStorage` in place of `localStorage` (same key, same `normaliseProfile` at
 the boundary), the Taptic Engine in place of Web Audio, and an explicit
 `AccessibilityInfo` check where the web gets `prefers-reduced-motion` from CSS.
@@ -222,8 +229,20 @@ as the connection string.
 ## Adding things
 
 **A creature:** add a `LineEntry` to the relevant line in `creatures.ts`. Art is
-generated from the spec, so no image is needed. `rosterIsComplete()` and the
-roster tests will tell you if the line is malformed.
+generated from its `ArtSpec` by `art.ts`, so no image is needed on either
+client. `rosterIsComplete()` and the roster tests will tell you if the line is
+malformed.
+
+**A whole evolution line:** add a `Line` with a unique `id`. `evolutionLine`
+walks by `lineId`, never by element, because two lines share each element -
+finding the root by element instead would evolve a Cinderpup into a Blazur, and
+a test guards exactly that.
+
+**An art feature** (a crown, a tail, a texture): extend the union in
+`creatures.ts` and add a branch in `art.ts`. Both clients pick it up with no
+change, because they only know how to draw primitives. `art.test.ts` asserts
+every value the roster uses produces more shapes than not using it, which is
+what catches a feature that silently draws nothing.
 
 **A maths skill:** add it to `SKILLS` and `SKILL_META` in `math.ts` with a tier
 band and both labels. The test suite re-evaluates every generated prompt

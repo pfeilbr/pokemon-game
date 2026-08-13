@@ -40,11 +40,11 @@ system, and the strategy around it is real:
   Promotion needs accuracy _and_ speed, so a lucky streak won't fling a
   seven-year-old into fractions.
 
-Progress is tracked properly: XP and trainer levels, an 18-creature album,
+Progress is tracked properly: XP and trainer levels, a 36-creature album,
 partner evolution at levels 4 and 8, twelve badges, daily streaks, and a
 per-skill accuracy and speed breakdown that doubles as the parent view.
 
-Everything is in **English and Chinese**, including all 18 creature names.
+Everything is in **English and Chinese**, including all 36 creature names.
 
 ---
 
@@ -98,7 +98,8 @@ a dice roll. XP, level-ups, evolutions and new badges are all called out by name
 
 ### Album
 
-All 18 creatures across six evolution lines. Un-caught ones stay silhouetted.
+All 36 creatures across twelve evolution lines, two per element. Un-caught
+ones stay silhouetted.
 
 ![Album](docs/screenshots/09-album.png)
 
@@ -215,7 +216,7 @@ drift between them. See [`mobile/README.md`](mobile/README.md).
 Next.js 16 (App Router) · React 19 · TypeScript (strict, `noUncheckedIndexedAccess`)
 · Tailwind CSS v4 · Postgres · Vitest · Playwright · Expo / React Native.
 
-**No image, font, or audio assets ship with this app.** All 18 creatures are
+**No image, font, or audio assets ship with this app.** All 36 creatures are
 procedurally drawn SVG generated from a data spec, and every sound effect is
 synthesised with the Web Audio API. Nothing is fetched at runtime, so the game
 loads instantly and works offline.
