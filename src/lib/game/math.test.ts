@@ -16,6 +16,7 @@ import {
   skillsForTier,
   summariseAttempts,
 } from './math';
+import { createRng } from './rng';
 
 const TIERS = Array.from({ length: MAX_TIER }, (_, i) => i + 1);
 
@@ -216,6 +217,188 @@ describe('nextTier', () => {
   it('only ever moves one tier at a time', () => {
     const perfect = Array.from({ length: 40 }, () => attempt(true, 1000));
     expect(nextTier(3, perfect)).toBe(4);
+  });
+});
+
+/**
+ * Properties of the ramp, swept rather than sampled.
+ *
+ * The cases above are hand-written points. These are the properties
+ * `scripts/simulate_difficulty.py` checks across a grid of synthetic players,
+ * restated here so they run in `npm test` on every change. The one that matters
+ * most is `cannot vault`: the claim in CLAUDE.md that a lucky streak cannot
+ * fling a child into fractions was *false* when it was first written, because
+ * the rolling window was carried across a promotion and every promotion was
+ * therefore decided on stale evidence.
+ */
+describe('nextTier properties', () => {
+  /** `size` attempts, `k` of them correct, all answered at `speedFactor` x par. */
+  const windowOf = (k: number, size: number, tier: number, speedFactor: number): Attempt[] =>
+    Array.from({ length: size }, (_, i) => ({
+      skill: 'add1',
+      tier,
+      correct: i < k,
+      elapsedMs: Math.round(parTimeForTier(tier) * 1000 * speedFactor),
+    }));
+
+  // Well inside par, just inside, at par, over, and hopelessly over.
+  const SPEEDS = [0.25, 0.6, 1, 1.5, 3];
+  // Deliberately includes tiers outside the band: a corrupt save can hand any
+  // number to the adapter, and it must land back inside rather than throw.
+  const INPUT_TIERS = Array.from({ length: MAX_TIER + 7 }, (_, i) => i + MIN_TIER - 3);
+
+  const sweep = (visit: (tier: number, k: number, size: number, speed: number) => void): void => {
+    for (const tier of INPUT_TIERS) {
+      for (let size = 0; size <= ADAPT_WINDOW * 2; size++) {
+        for (let k = 0; k <= size; k++) {
+          for (const speed of SPEEDS) visit(tier, k, size, speed);
+        }
+      }
+    }
+  };
+
+  it('never moves more than one tier in a single update, for any window', () => {
+    sweep((tier, k, size, speed) => {
+      const result = nextTier(tier, windowOf(k, size, clampTier(tier), speed));
+      expect(
+        Math.abs(result - clampTier(tier)),
+        `tier ${tier} -> ${result} on ${k}/${size} at ${speed}x par`,
+      ).toBeLessThanOrEqual(1);
+    });
+  });
+
+  it('never returns a tier outside the band, whatever it is given', () => {
+    sweep((tier, k, size, speed) => {
+      const result = nextTier(tier, windowOf(k, size, clampTier(tier), speed));
+      expect(result, `tier ${tier} on ${k}/${size} at ${speed}x par`).toBeGreaterThanOrEqual(
+        MIN_TIER,
+      );
+      expect(result).toBeLessThanOrEqual(MAX_TIER);
+    });
+  });
+
+  it('never promotes on less than a full window of evidence', () => {
+    sweep((tier, k, size, speed) => {
+      if (size >= ADAPT_WINDOW) return;
+      const result = nextTier(tier, windowOf(k, size, clampTier(tier), speed));
+      expect(
+        result,
+        `promoted from ${tier} on only ${size} attempts (${k} correct, ${speed}x par)`,
+      ).toBeLessThanOrEqual(clampTier(tier));
+    });
+  });
+
+  it('is monotone in accuracy: more correct answers never lands lower', () => {
+    for (const tier of INPUT_TIERS) {
+      for (const speed of SPEEDS) {
+        for (let k = 0; k < ADAPT_WINDOW; k++) {
+          const worse = nextTier(tier, windowOf(k, ADAPT_WINDOW, clampTier(tier), speed));
+          const better = nextTier(tier, windowOf(k + 1, ADAPT_WINDOW, clampTier(tier), speed));
+          expect(better, `tier ${tier}, ${k} vs ${k + 1} correct`).toBeGreaterThanOrEqual(worse);
+        }
+      }
+    }
+  });
+
+  it('is monotone in speed: answering slower never lands higher', () => {
+    for (const tier of INPUT_TIERS) {
+      for (let k = 0; k <= ADAPT_WINDOW; k++) {
+        for (let i = 1; i < SPEEDS.length; i++) {
+          const faster = nextTier(tier, windowOf(k, ADAPT_WINDOW, clampTier(tier), SPEEDS[i - 1]!));
+          const slower = nextTier(tier, windowOf(k, ADAPT_WINDOW, clampTier(tier), SPEEDS[i]!));
+          expect(slower, `tier ${tier}, ${k} correct, ${SPEEDS[i]}x par`).toBeLessThanOrEqual(
+            faster,
+          );
+        }
+      }
+    }
+  });
+
+  it('reads the window as a set, not a sequence', () => {
+    // Same score, same average speed, different order: same decision. A child
+    // who stumbles early and recovers is in the same place as one who does not.
+    for (let k = 0; k <= ADAPT_WINDOW; k++) {
+      const front = windowOf(k, ADAPT_WINDOW, 5, 0.5);
+      const back = [...front].reverse();
+      expect(nextTier(5, back)).toBe(nextTier(5, front));
+    }
+  });
+});
+
+describe('the ramp over a whole play session', () => {
+  const answer = (tier: number, correct: boolean, speedFactor: number): Attempt => ({
+    skill: 'add1',
+    tier,
+    correct,
+    elapsedMs: Math.round(parTimeForTier(tier) * 1000 * speedFactor),
+  });
+
+  /**
+   * Walks a synthetic player question by question.
+   *
+   * The window is cleared on a tier change because that is the discipline
+   * `applyBattleResult` enforces: every attempt in it was answered at the
+   * *previous* difficulty, so carrying it forward would promote again on the
+   * very next question. Carrying it is precisely the bug that let a perfect run
+   * climb from adding-to-20 to two-step expressions in sixteen questions.
+   */
+  const play = (questions: number, isCorrect: (i: number) => boolean, speedFactor: number) => {
+    let tier = MIN_TIER;
+    let window: Attempt[] = [];
+    let tierSum = 0;
+    let highest = tier;
+    const reachedTop: number[] = [];
+
+    for (let i = 0; i < questions; i++) {
+      tierSum += tier;
+      window = [...window, answer(tier, isCorrect(i), speedFactor)].slice(-ADAPT_WINDOW);
+      const next = nextTier(tier, window);
+      expect(
+        Math.abs(next - tier),
+        `jumped ${tier} -> ${next} at question ${i}`,
+      ).toBeLessThanOrEqual(1);
+      if (next !== tier) {
+        tier = next;
+        window = [];
+        if (tier > highest) highest = tier;
+        if (tier === MAX_TIER && reachedTop.length === 0) reachedTop.push(i + 1);
+      }
+      expect(tier).toBeGreaterThanOrEqual(MIN_TIER);
+      expect(tier).toBeLessThanOrEqual(MAX_TIER);
+    }
+
+    return { tier, highest, meanTier: tierSum / questions, questionsToTop: reachedTop[0] ?? null };
+  };
+
+  it('cannot be vaulted: every tier costs a full window, even played perfectly', () => {
+    const run = play(400, () => true, 0.25);
+    expect(run.tier).toBe(MAX_TIER);
+    // Nine promotions, eight questions of fresh evidence each. Anything less
+    // means a promotion was granted on evidence from an easier tier.
+    expect(run.questionsToTop).toBeGreaterThanOrEqual((MAX_TIER - MIN_TIER) * ADAPT_WINDOW);
+  });
+
+  it('never promotes a perfect player who is answering slower than par', () => {
+    const run = play(400, () => true, 1.5);
+    expect(run.highest).toBe(MIN_TIER);
+  });
+
+  it('does not let a struggling player drift upward', () => {
+    // A coin-flip player, answering fast: fast enough to promote whenever the
+    // window happens to come up 7/8, which it will a few times in 600
+    // questions. That single bump is the rolling window doing its job. What
+    // must not happen is a sustained climb, so this asserts the drift.
+    const rng = createRng('math.test:struggling');
+    const run = play(600, () => rng.next() < 0.5, 0.25);
+    expect(run.meanTier).toBeLessThan(MIN_TIER + 1);
+    expect(run.highest).toBeLessThanOrEqual(MIN_TIER + 3);
+  });
+
+  it('lets a strong player climb the whole ladder', () => {
+    // 7 of every 8 correct is exactly the promotion threshold: he should top
+    // out, so the ramp is not merely safe but actually reachable.
+    const run = play(400, (i) => i % 8 !== 7, 0.5);
+    expect(run.tier).toBe(MAX_TIER);
   });
 });
 
