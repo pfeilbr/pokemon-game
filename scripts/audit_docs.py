@@ -164,8 +164,6 @@ import { movesFor } from '@engine/moves';
 import { ADAPT_WINDOW, MAX_TIER, MIN_TIER, SKILLS } from '@engine/math';
 import { BADGES, EVOLVE_AT, MAX_LEVEL } from '@engine/progress';
 import { STORAGE_KEY as WEB_STORAGE_KEY } from '@/lib/storage/client';
-import { STORAGE_KEY as IOS_STORAGE_KEY } from '@mobile/storage';
-import { TAP as IOS_TAP } from '@mobile/theme';
 
 /** Lines are grouped by lineId, exactly as `evolutionLine` walks them. */
 const byLine = new Map();
@@ -228,11 +226,43 @@ process.stdout.write(
     evolveAt: [EVOLVE_AT[2], EVOLVE_AT[3]],
     badges: BADGES.length,
     webStorageKey: WEB_STORAGE_KEY,
-    iosStorageKey: IOS_STORAGE_KEY,
-    iosTap: IOS_TAP,
   }),
 );
 """
+
+
+# The two iOS values below are read from source rather than executed.
+#
+# Both are plain literals, and running them meant bundling `mobile/src/*`,
+# which transitively imports `@react-native-async-storage/async-storage`. That
+# resolves on a developer machine and fails in CI, where the root job installs
+# only the root's dependencies - the same trap that had the web typecheck
+# compiling React Native for sixteen red runs. A literal does not need a
+# bundler.
+IOS_STORAGE = REPO / "mobile" / "src" / "storage.ts"
+IOS_THEME = REPO / "mobile" / "src" / "theme.ts"
+
+
+def literal(path: "Path", pattern: str, what: str) -> str:
+    if not path.is_file():
+        broke(f"{path.relative_to(REPO)} is missing, so {what} cannot be read")
+    match = re.search(pattern, path.read_text(encoding="utf-8"))
+    if match is None:
+        broke(f"could not find {what} in {path.relative_to(REPO)}")
+    return match.group(1)
+
+
+def ios_values() -> dict:
+    return {
+        "iosStorageKey": literal(
+            IOS_STORAGE,
+            r"export const STORAGE_KEY\s*=\s*['\"]([^'\"]+)['\"]",
+            "STORAGE_KEY",
+        ),
+        "iosTap": int(
+            literal(IOS_THEME, r"export const TAP\s*=\s*(\d+)", "TAP")
+        ),
+    }
 
 
 def broke(message: str) -> "None":
@@ -263,7 +293,6 @@ def run_engine() -> dict:
                 "--format=esm",
                 "--log-level=warning",
                 f"--alias:@engine={REPO / 'src' / 'lib' / 'game'}",
-                f"--alias:@mobile={REPO / 'mobile' / 'src'}",
                 f"--alias:@={REPO / 'src'}",
                 f"--outfile={bundle}",
             ],
@@ -281,7 +310,7 @@ def run_engine() -> dict:
             broke(f"engine harness exited {run.returncode}\n{run.stderr.strip()}")
 
         try:
-            return json.loads(run.stdout)
+            return {**json.loads(run.stdout), **ios_values()}
         except json.JSONDecodeError as error:
             broke(f"harness printed something that is not JSON: {error}")
             raise

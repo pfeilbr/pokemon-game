@@ -30,6 +30,23 @@ npm run screenshots  # regenerate docs/screenshots/
 In a sandbox whose bundled Chromium predates this Playwright version, set
 `PLAYWRIGHT_CHROMIUM_PATH` to the local Chromium binary.
 
+**The root CI job does not install `mobile/node_modules`.** Anything at the root
+that reaches into `mobile/` therefore passes on a developer machine, where those
+packages happen to be present, and fails only in CI. This has bitten twice: the
+root `tsconfig` quietly type-checking 23 React Native files (sixteen red runs),
+and `audit_docs.py` bundling `mobile/src/storage.ts` for a string literal. To
+reproduce CI before pushing:
+
+```bash
+# Park it OUTSIDE the repo: audit_assets.py rightly objects to an untracked,
+# un-ignored directory appearing in the tree, so a `.bak` alongside it would
+# fail this very check.
+mv mobile/node_modules /tmp/mm-node-modules
+npm run typecheck && npm run lint && npm test && npm run build
+python3 scripts/audit_assets.py && python3 scripts/audit_a11y.py && python3 scripts/audit_docs.py
+mv /tmp/mm-node-modules mobile/node_modules
+```
+
 ### iOS
 
 ```bash
