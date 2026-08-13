@@ -1,0 +1,17 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "jsx": "react-jsx",
+    // `process.env.EXPO_PUBLIC_*` is inlined by Metro at build time, so the
+    // Node types are needed for the declaration even though nothing runs on Node.
+    "types": ["node"],
+    "paths": {
+      "@game/*": ["../src/lib/game/*"],
+      "@shared/*": ["../src/lib/*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", "../src/lib/game/**/*.ts", "../src/lib/i18n.ts"],
+  "exclude": ["node_modules", "dist", "ios", "android"]
+}

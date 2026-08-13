@@ -16,6 +16,9 @@ const config = [
       'playwright-report/**',
       'test-results/**',
       'docs/**',
+      // The iOS client has its own toolchain and its own config files, some of
+      // which (metro.config.js) must be CommonJS.
+      'mobile/**',
     ],
   },
   {

@@ -5,3 +5,9 @@ docs/screenshots
 playwright-report
 test-results
 package-lock.json
+mobile/node_modules
+mobile/dist
+mobile/ios
+mobile/android
+mobile/.expo
+mobile/package-lock.json

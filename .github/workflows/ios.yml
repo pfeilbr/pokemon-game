@@ -1,0 +1,180 @@
+name: iOS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - 'src/lib/**'
+      - '.github/workflows/ios.yml'
+  pull_request:
+    paths:
+      - 'mobile/**'
+      - 'src/lib/**'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Everything that does not need macOS runs on the cheap runner first, so a
+  # typo never burns a macOS minute.
+  checks:
+    name: Typecheck and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - run: npm ci
+        working-directory: mobile
+
+      - name: Typecheck
+        run: npm run typecheck
+        working-directory: mobile
+
+      - name: Tests (shared engine seam + API contract)
+        run: npm test
+        working-directory: mobile
+
+      - name: Bundle for iOS with Metro
+        run: npm run bundle
+        working-directory: mobile
+
+  # A simulator build needs no Apple Developer account, no certificates and no
+  # secrets, so this proves the app compiles and launches on real macOS for
+  # free, before any credentials exist.
+  simulator:
+    name: Build and launch on iOS Simulator
+    needs: checks
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          echo "Selected Xcode: $(xcode-select -p)"
+
+      - run: npm ci
+        working-directory: mobile
+
+      - name: Generate the native iOS project
+        run: npx expo prebuild --platform ios --no-install --clean
+        working-directory: mobile
+
+      - name: Install CocoaPods
+        run: pod install
+        working-directory: mobile/ios
+
+      - name: Discover the Xcode workspace and scheme
+        id: xcode
+        working-directory: mobile/ios
+        run: |
+          workspace=$(ls -d *.xcworkspace | head -1)
+          scheme=$(xcodebuild -workspace "$workspace" -list -json | python3 -c "import json,sys; print(json.load(sys.stdin)['workspace']['schemes'][0])")
+          echo "workspace=$workspace" >> "$GITHUB_OUTPUT"
+          echo "scheme=$scheme" >> "$GITHUB_OUTPUT"
+          echo "Building $scheme from $workspace"
+
+      - name: Build for the simulator (unsigned)
+        working-directory: mobile/ios
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -workspace "${{ steps.xcode.outputs.workspace }}" \
+            -scheme "${{ steps.xcode.outputs.scheme }}" \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+
+      - name: Boot a simulator, install and launch
+        working-directory: mobile/ios
+        run: |
+          set -euo pipefail
+          app=$(find build/Build/Products -name '*.app' -maxdepth 3 | head -1)
+          echo "Built app: $app"
+          bundle_id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
+          echo "Bundle id: $bundle_id"
+
+          device=$(xcrun simctl create mathmon-ci com.apple.CoreSimulator.SimDeviceType.iPhone-16)
+          xcrun simctl boot "$device"
+          xcrun simctl bootstatus "$device" -b
+
+          xcrun simctl install "$device" "$app"
+          xcrun simctl launch "$device" "$bundle_id"
+
+          # Give the shell a moment to render before capturing it.
+          sleep 12
+          xcrun simctl io "$device" screenshot launch.png
+
+          # A crashed app leaves no running process; this is the real assertion.
+          if ! xcrun simctl spawn "$device" launchctl list | grep -q "$bundle_id"; then
+            echo "::error::App is not running after launch - it crashed on startup"
+            xcrun simctl diagnose -b --no-archive || true
+            exit 1
+          fi
+          echo "App is running."
+
+      - name: Upload launch screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-launch
+          path: mobile/ios/launch.png
+          retention-days: 14
+          if-no-files-found: warn
+
+  # The signed path. Skips itself until an Expo token exists, so the workflow
+  # stays green before any credentials are configured.
+  signed-build:
+    name: Signed build via EAS
+    needs: simulator
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for credentials
+        id: creds
+        run: |
+          if [ -n "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::EXPO_TOKEN is not set, so no signed build was produced. Add it in Settings > Secrets to enable TestFlight builds."
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.creds.outputs.ready == 'true'
+        with:
+          node-version: 22
+
+      - name: Build and sign on Expo's macOS infrastructure
+        if: steps.creds.outputs.ready == 'true'
+        working-directory: mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          npm ci
+          # EAS manages the certificate and provisioning profile itself, so no
+          # .p12 or profile ever has to be stored in this repository.
+          npx eas-cli@latest build --platform ios --profile production --non-interactive --no-wait

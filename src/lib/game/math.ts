@@ -299,17 +299,17 @@ const LEVEL_DOWN_ACCURACY = 0.6;
  */
 export function nextTier(currentTier: number, recent: readonly Attempt[]): number {
   const current = clampTier(currentTier);
-  const window = recent.slice(-ADAPT_WINDOW);
-  if (window.length < ADAPT_WINDOW) {
+  const sample = recent.slice(-ADAPT_WINDOW);
+  if (sample.length < ADAPT_WINDOW) {
     // Not enough evidence to promote, but bail out early if he is clearly lost.
-    const wrong = window.filter((a) => !a.correct).length;
-    if (window.length >= 3 && wrong === window.length) return clampTier(current - 1);
+    const wrong = sample.filter((a) => !a.correct).length;
+    if (sample.length >= 3 && wrong === sample.length) return clampTier(current - 1);
     return current;
   }
 
-  const accuracy = window.filter((a) => a.correct).length / window.length;
+  const accuracy = sample.filter((a) => a.correct).length / sample.length;
   if (accuracy >= LEVEL_UP_ACCURACY) {
-    const avgMs = window.reduce((s, a) => s + a.elapsedMs, 0) / window.length;
+    const avgMs = sample.reduce((s, a) => s + a.elapsedMs, 0) / sample.length;
     const par = parTimeForTier(current) * 1000;
     // Accurate *and* comfortable within par - ready for harder.
     if (avgMs <= par) return clampTier(current + 1);

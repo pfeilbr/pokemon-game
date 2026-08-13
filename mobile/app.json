@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "Mathmon",
+    "slug": "mathmon",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "mathmon",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "backgroundColor": "#0b1120",
+    "ios": {
+      "bundleIdentifier": "com.pfeilbr.mathmon",
+      "supportsTablet": true,
+      "buildNumber": "1"
+    },
+    "extra": {
+      "eas": {}
+    }
+  }
+}
