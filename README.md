@@ -198,10 +198,22 @@ deployment.
 
 ---
 
+## Clients
+
+| Client | Stack                                  | Status                      |
+| ------ | -------------------------------------- | --------------------------- |
+| Web    | Next.js 16 App Router                  | Complete and deployable     |
+| iOS    | React Native / Expo SDK 57 (`mobile/`) | Shell running; game UI next |
+
+Both consume the **same game engine** from `src/lib/game/`, so the rules cannot
+drift between them. See [`mobile/README.md`](mobile/README.md).
+
+---
+
 ## How it is built
 
 Next.js 16 (App Router) · React 19 · TypeScript (strict, `noUncheckedIndexedAccess`)
-· Tailwind CSS v4 · Postgres · Vitest · Playwright.
+· Tailwind CSS v4 · Postgres · Vitest · Playwright · Expo / React Native.
 
 **No image, font, or audio assets ship with this app.** All 18 creatures are
 procedurally drawn SVG generated from a data spec, and every sound effect is

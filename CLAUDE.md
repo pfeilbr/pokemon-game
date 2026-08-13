@@ -28,7 +28,20 @@ npm run screenshots  # regenerate docs/screenshots/
 ```
 
 In a sandbox whose bundled Chromium predates this Playwright version, set
-`PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium`.
+`PLAYWRIGHT_CHROMIUM_PATH` to the local Chromium binary.
+
+### iOS
+
+```bash
+cd mobile
+npm run typecheck
+npm test          # shared-engine seam + API client contract
+npm run bundle    # real Metro/Hermes compile; works on Linux, no Xcode needed
+```
+
+Everything requiring macOS runs on GitHub Actions, not locally - see
+`.github/workflows/ios.yml` and `mobile/README.md`. The simulator job needs no
+Apple credentials, so the iOS build is verified on every push for free.
 
 ### Testing the database path
 
@@ -65,7 +78,22 @@ src/lib/server/     Postgres, sessions, accounts. Server-only.
 src/components/     React. Presentation and timing only.
 src/app/            Next.js App Router pages and API routes.
 e2e/                Playwright specs, including the screenshot suite.
+mobile/             iOS client (React Native / Expo). See mobile/README.md.
 ```
+
+### Two clients, one engine
+
+`src/lib/game/` is consumed by both the web app and the iOS client. That is the
+whole reason the engine is kept free of React, the DOM, Node APIs and ambient
+randomness - portability is a consequence of purity, not a separate goal.
+
+The iOS client reaches it through `mobile/src/engine.ts`, the single file that
+knows the path across the directory boundary, with Metro `watchFolders` making
+it visible. `mobile/src/engine.test.ts` fails if a shared module grows a Node
+or browser dependency that would break under Hermes.
+
+So: a rule change belongs in `src/lib/game/` and lands on both clients at once.
+Never fork a rule into a client.
 
 ### Why the engine is pure
 

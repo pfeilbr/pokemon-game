@@ -12,6 +12,12 @@
       "@shared/*": ["../src/lib/*"]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx", "../src/lib/game/**/*.ts", "../src/lib/i18n.ts"],
-  "exclude": ["node_modules", "dist", "ios", "android"]
+  // Only this app's own files. The shared engine is still fully typechecked,
+  // because TypeScript follows the imports out of src/engine.ts - but listing
+  // the shared directory explicitly would also drag in the web app's *.test.ts
+  // files, which import vitest from the root install and are covered by root CI.
+  "include": ["**/*.ts", "**/*.tsx"],
+  // vitest.config.ts is build tooling, not app code, and pulling it in drags
+  // esbuild's types along with it - which are not part of this app's install.
+  "exclude": ["node_modules", "dist", "ios", "android", "vitest.config.ts"]
 }
