@@ -162,7 +162,18 @@ jobs:
         run: |
           set -euo pipefail
           udid="${{ steps.sim.outputs.udid }}"
-          app=$(find build/Build/Products -maxdepth 3 -name '*.app' | head -1)
+
+          # Search only the configuration directory, one level deep. A wider
+          # search also walks XCFrameworkIntermediates, and an empty result
+          # silently became "/Info.plist" - which is what failed here before.
+          app=$(find build/Build/Products/Debug-iphonesimulator -maxdepth 1 -type d -name '*.app' 2>/dev/null | head -1)
+          if [ -z "$app" ] || [ ! -f "$app/Info.plist" ]; then
+            echo "::error::no built .app found under build/Build/Products"
+            echo "Contents of build/Build/Products:"
+            find build/Build/Products -maxdepth 3 -name '*.app' -o -maxdepth 2 -type d | head -40
+            exit 1
+          fi
+
           bundle_id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
           echo "Launching $bundle_id from $app"
 
