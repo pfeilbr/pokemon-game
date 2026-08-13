@@ -219,19 +219,39 @@ jobs:
           # A crashed app leaves no running process. In a Release build there
           # is no redbox to hide behind: an unhandled JS error or a bundle that
           # fails to load is fatal, so surviving here means JS really ran.
-          if ! xcrun simctl spawn "$udid" launchctl list | grep -q "$bundle_id"; then
-            echo "::error::App is not running after launch - it crashed on startup"
-            exit 1
-          fi
-          echo "App is running."
+          #
+          # Deliberately not piped into grep -q. That exits at the first match
+          # and kills launchctl with SIGPIPE, which pipefail then reports as a
+          # failed pipeline - so a *running* app failed this check. Whether it
+          # happened at all depended on whether the output fit the pipe buffer,
+          # which is why it passed once and then failed. Match in the shell.
+          listing=$(xcrun simctl spawn "$udid" launchctl list)
+          case "$listing" in
+            *"$bundle_id"*) echo "App is running." ;;
+            *)
+              echo "::error::App is not running after launch - it crashed on startup"
+              exit 1
+              ;;
+          esac
 
       # The strongest assertion in this job: read the rendered pixels back. A
       # redbox or a blank screen both leave a live process, so "it launched" is
       # not evidence the app works. These strings can only appear if the shared
       # engine resolved under Metro, ran under Hermes and rendered.
+      # Runs even when the step above failed, because when something goes wrong
+      # what was on screen is the most useful thing in the log. Twice now the
+      # screenshot has been the only honest account of what happened.
       - name: Assert the shell actually rendered
+        if: always()
         working-directory: mobile/ios
-        run: swift ../scripts/assert-screenshot-text.swift launch.png "Mathmon" "Creatures loaded" "Element wheel balanced"
+        run: |
+          set -euo pipefail
+          if [ ! -f launch.png ]; then
+            echo "No screenshot was captured, so there is nothing to read."
+            exit 0
+          fi
+          swift ../scripts/assert-screenshot-text.swift launch.png \
+            "Mathmon" "Creatures loaded" "Element wheel balanced"
 
       - name: Upload launch screenshot
         if: always()

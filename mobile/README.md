@@ -107,6 +107,12 @@ reuse them afterwards.
 
 ## Status
 
+![The iOS shell running on a simulator](docs/ios-shell.png)
+
+That screenshot is not a mockup. It was captured by the `simulator` job on a
+GitHub macOS runner, from a Release build with the JavaScript bundle embedded,
+and every value on it was read live from the shared engine at render time.
+
 The current screen is a shell: it reads the roster, the seeded maths generator
 and the element wheel live from the shared engine, and calls `/api/session`. It
 is deliberately not a literal "hello world" — it exercises exactly the things
