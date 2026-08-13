@@ -54,7 +54,9 @@ jobs:
   simulator:
     name: Build and launch on iOS Simulator
     needs: checks
-    runs-on: macos-15
+    # Expo SDK 57 needs Swift 6.2 (see the toolchain step below), which ships
+    # with Xcode 26. The macos-15 image tops out at Xcode 16.4 / Swift 6.1.
+    runs-on: macos-26
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -64,10 +66,25 @@ jobs:
           cache: npm
           cache-dependency-path: mobile/package-lock.json
 
-      - name: Show toolchain
+      - name: Select the newest Xcode and check the Swift version
         run: |
+          set -euo pipefail
+          newest=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)
+          echo "Available Xcodes:"; ls -d /Applications/Xcode*.app || true
+          sudo xcode-select -s "$newest/Contents/Developer"
           xcodebuild -version
-          echo "Selected Xcode: $(xcode-select -p)"
+          swift --version
+
+          # Fail here with a clear message rather than 6 minutes later inside a
+          # CocoaPods script phase: ExpoModulesJSI ships a Swift package that
+          # declares swift-tools-version 6.2, and SwiftPM refuses to resolve it
+          # on an older toolchain.
+          version=$(swift --version 2>&1 | sed -nE 's/.*Swift version ([0-9]+\.[0-9]+).*/\1/p' | head -1)
+          echo "Swift toolchain: $version"
+          if [ "$(printf '%s\n6.2' "$version" | sort -V | head -1)" != "6.2" ]; then
+            echo "::error::Swift $version is too old - Expo SDK 57 requires 6.2 (Xcode 26+)"
+            exit 1
+          fi
 
       - run: npm ci
         working-directory: mobile

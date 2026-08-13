@@ -61,12 +61,18 @@ no database attached.
 All macOS work happens on GitHub Actions (`.github/workflows/ios.yml`), not on
 a developer machine.
 
-**Today, with no credentials at all**, the `simulator` job on `macos-15` runs
+**Today, with no credentials at all**, the `simulator` job on `macos-26` runs
 `expo prebuild`, `pod install` and `xcodebuild`, then boots a simulator to
 install, launch and screenshot the app. It asserts the process is still alive
 after launch, because a build that compiles but crashes on startup is not a
 passing build. The screenshot is uploaded as an artifact. Simulator builds need
 no Apple Developer account, so this is free and runs on every push.
+
+The runner image matters: Expo SDK 57 ships a Swift package declaring
+`swift-tools-version 6.2`, so the build needs Xcode 26 or newer. On the
+`macos-15` image (Xcode 16.4 / Swift 6.1) SwiftPM refuses to resolve it, six
+minutes into the build, inside a CocoaPods script phase. The workflow now
+asserts the Swift version up front so that failure is immediate and legible.
 
 **For a signed build**, add an `EXPO_TOKEN` repository secret
 ([expo.dev](https://expo.dev) → account → access tokens). The `signed-build`
