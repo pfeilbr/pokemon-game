@@ -130,7 +130,7 @@ reuse them afterwards.
 
 ## Status
 
-![The iOS app on a simulator](docs/ios-shell.png)
+![The iOS app on a simulator](docs/ios-launch.png)
 
 That screenshot is not a mockup. It was captured by the `simulator` job on a
 GitHub macOS runner, from a Release build with the JavaScript bundle embedded.

@@ -48,8 +48,21 @@ let lines = (request.results ?? []).compactMap { $0.topCandidates(1).first?.stri
 print("Text found on screen (\(lines.count) lines):")
 for line in lines { print("  \(line)") }
 
-let haystack = lines.joined(separator: "\n")
-let missing = required.filter { !haystack.localizedCaseInsensitiveContains($0) }
+/// Collapses all runs of whitespace to single spaces.
+///
+/// Vision returns one observation per *visual* line, so a heading that wraps on
+/// a narrow phone comes back as "Mathmon Battle" and "League" separately.
+/// Joining those with a newline and searching for "Mathmon Battle League" then
+/// fails on a screen that is perfectly correct - which is exactly what happened
+/// here, and cost two red runs against a working app. Matching against the
+/// whitespace-normalised join makes the assertion about the words on screen
+/// rather than about where the layout chose to break them.
+func normalised(_ text: String) -> String {
+    text.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+}
+
+let haystack = normalised(lines.joined(separator: " "))
+let missing = required.filter { !haystack.localizedCaseInsensitiveContains(normalised($0)) }
 
 guard missing.isEmpty else {
     for want in missing {
