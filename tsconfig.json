@@ -30,5 +30,12 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "e2e"]
+  // `mobile` is a separate TypeScript project: its own tsconfig, its own
+  // dependencies, its own CI job. Leaving it in this project's `**/*` include
+  // made `npm run typecheck` here quietly compile 23 React Native files, which
+  // passed on a developer machine only because `mobile/node_modules` happened
+  // to be installed - and failed in CI, where the root job installs only the
+  // root's dependencies. The web app imports nothing from `mobile`, so there is
+  // no coverage to lose; `.github/workflows/ios.yml` typechecks it properly.
+  "exclude": ["node_modules", "e2e", "mobile"]
 }
