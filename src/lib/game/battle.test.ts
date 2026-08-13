@@ -14,7 +14,7 @@ import {
   summarise,
 } from './battle';
 import { MAX_CHARGE } from './moves';
-import { CREATURES, getCreature } from './creatures';
+import { CREATURES, getCreature, statsAtLevel } from './creatures';
 import { NOT_VERY_EFFECTIVE, SUPER_EFFECTIVE } from './elements';
 
 const setup = {
@@ -450,7 +450,38 @@ describe('difficulty balance', () => {
     return s;
   }
 
+  /**
+   * Scope of the balance sweeps.
+   *
+   * These used to be written as "all 36 starter matchups" back when the roster
+   * was six lines. The roster is now twelve lines - two per element - so the
+   * real space is 144 ordered pairs. The sweeps below derive their scope from
+   * the roster, which means they widened silently when the roster doubled; a
+   * scope that can widen silently can also *narrow* silently, and a balance
+   * sweep that quietly stops covering half the game is worse than no sweep.
+   * So the count is pinned and asserted rather than assumed.
+   */
+  const EXPECTED_STARTERS = 12;
+  const EXPECTED_MATCHUPS = EXPECTED_STARTERS * EXPECTED_STARTERS; // 144
+
   const stageOne = CREATURES.filter((c) => c.stage === 1);
+
+  /** Every ordered (player, foe) pair. Ordered: A into B is not B into A. */
+  const MATCHUPS: Array<{ player: (typeof stageOne)[number]; foe: (typeof stageOne)[number] }> =
+    stageOne.flatMap((player) => stageOne.map((foe) => ({ player, foe })));
+
+  /**
+   * Guards the scope of every sweep in this block. If the roster grows or a
+   * filter changes, this fails before the balance properties do, so a shrunken
+   * sweep can never masquerade as a passing one.
+   */
+  it('sweeps all 144 starter matchups, not just the original 36', () => {
+    expect(stageOne).toHaveLength(EXPECTED_STARTERS);
+    expect(MATCHUPS).toHaveLength(EXPECTED_MATCHUPS);
+    // Two lines per element, and no line counted twice.
+    expect(new Set(stageOne.map((c) => c.lineId)).size).toBe(EXPECTED_STARTERS);
+    expect(new Set(stageOne.map((c) => c.element)).size).toBe(6);
+  });
 
   /**
    * The headline property: good play beats every matchup, including the worst
@@ -458,21 +489,22 @@ describe('difficulty balance', () => {
    * on purpose - that is the fight that teaches him to counter-pick.
    */
   it('lets skilled play win every matchup, worst case included', () => {
-    for (const player of stageOne) {
-      for (const foe of stageOne) {
-        const s = playSmart(
-          createBattle({
-            seed: `${player.id}-vs-${foe.id}`,
-            playerCreatureId: player.id,
-            foeCreatureId: foe.id,
-            playerLevel: 3,
-            foeLevel: 3,
-            tier: 4,
-          }),
-        );
-        expect(s.outcome, `${player.id} vs ${foe.id}`).toBe('win');
-      }
+    let played = 0;
+    for (const { player, foe } of MATCHUPS) {
+      const s = playSmart(
+        createBattle({
+          seed: `${player.id}-vs-${foe.id}`,
+          playerCreatureId: player.id,
+          foeCreatureId: foe.id,
+          playerLevel: 3,
+          foeLevel: 3,
+          tier: 4,
+        }),
+      );
+      expect(s.outcome, `${player.id} vs ${foe.id}`).toBe('win');
+      played++;
     }
+    expect(played).toBe(EXPECTED_MATCHUPS);
   });
 
   /**
@@ -481,21 +513,22 @@ describe('difficulty balance', () => {
    * winnable, or a child's first ever battle can be an unavoidable loss.
    */
   it('lets a level-1 trainer win every matchup they can be offered', () => {
-    for (const player of stageOne) {
-      for (const foe of stageOne) {
-        const s = playSmart(
-          createBattle({
-            seed: `lv1-${player.id}-${foe.id}`,
-            playerCreatureId: player.id,
-            foeCreatureId: foe.id,
-            playerLevel: 1,
-            foeLevel: 1,
-            tier: 1,
-          }),
-        );
-        expect(s.outcome, `level 1: ${player.id} vs ${foe.id}`).toBe('win');
-      }
+    let played = 0;
+    for (const { player, foe } of MATCHUPS) {
+      const s = playSmart(
+        createBattle({
+          seed: `lv1-${player.id}-${foe.id}`,
+          playerCreatureId: player.id,
+          foeCreatureId: foe.id,
+          playerLevel: 1,
+          foeLevel: 1,
+          tier: 1,
+        }),
+      );
+      expect(s.outcome, `level 1: ${player.id} vs ${foe.id}`).toBe('win');
+      played++;
     }
+    expect(played).toBe(EXPECTED_MATCHUPS);
   });
 
   it('punishes the worst matchup enough that counter-picking matters', () => {
@@ -543,30 +576,60 @@ describe('difficulty balance', () => {
    * player could once win while answering every single question wrong.
    */
   it('never lets a wrong-answer run win, even with the best matchup', () => {
-    for (const player of stageOne) {
-      for (const foe of stageOne) {
-        const s = playOut(
-          createBattle({
-            seed: `mash-${player.id}-${foe.id}`,
-            playerCreatureId: player.id,
-            foeCreatureId: foe.id,
-            playerLevel: 3,
-            foeLevel: 3,
-            tier: 4,
-          }),
-          false,
-        );
-        expect(s.outcome, `${player.id} vs ${foe.id}`).toBe('loss');
+    let played = 0;
+    for (const { player, foe } of MATCHUPS) {
+      const s = playOut(
+        createBattle({
+          seed: `mash-${player.id}-${foe.id}`,
+          playerCreatureId: player.id,
+          foeCreatureId: foe.id,
+          playerLevel: 3,
+          foeLevel: 3,
+          tier: 4,
+        }),
+        false,
+      );
+      expect(s.outcome, `${player.id} vs ${foe.id}`).toBe('loss');
+      played++;
+    }
+    expect(played).toBe(EXPECTED_MATCHUPS);
+  });
+
+  /**
+   * Stats must not creep between lines. With two lines per element it is now
+   * possible for a *line* to be secretly best even though no element is, so
+   * this checks the whole starter set rather than one per element.
+   */
+  it('gives every starter identical stats at equal level', () => {
+    for (const level of [1, 3, 8]) {
+      const stats = stageOne.map((c) => statsAtLevel(c, level));
+      const first = stats[0]!;
+      for (const [i, s] of stats.entries()) {
+        expect(s.hp, `${stageOne[i]!.id} hp at level ${level}`).toBe(first.hp);
+        expect(s.atk, `${stageOne[i]!.id} atk at level ${level}`).toBe(first.atk);
       }
     }
+    expect(stageOne).toHaveLength(EXPECTED_STARTERS);
   });
 
   it('keeps every battle to a sensible number of turns', () => {
-    for (const foe of stageOne) {
-      const s = playSmart(fresh({ foeCreatureId: foe.id }));
-      expect(s.turn).toBeGreaterThan(1);
-      expect(s.turn).toBeLessThan(20);
+    let played = 0;
+    for (const { player, foe } of MATCHUPS) {
+      const s = playSmart(
+        createBattle({
+          seed: `turns-${player.id}-${foe.id}`,
+          playerCreatureId: player.id,
+          foeCreatureId: foe.id,
+          playerLevel: 3,
+          foeLevel: 3,
+          tier: 4,
+        }),
+      );
+      expect(s.turn, `${player.id} vs ${foe.id}`).toBeGreaterThan(1);
+      expect(s.turn, `${player.id} vs ${foe.id}`).toBeLessThan(20);
+      played++;
     }
+    expect(played).toBe(EXPECTED_MATCHUPS);
   });
 });
 

@@ -24,11 +24,13 @@ export function Home({
   onBattle,
   onAlbum,
   onProgress,
+  onSettings,
 }: {
   profile: Profile;
   onBattle: () => void;
   onAlbum: () => void;
   onProgress: () => void;
+  onSettings: () => void;
 }) {
   const { language, tr, feedback } = useGame();
 
@@ -87,6 +89,12 @@ export function Home({
           label={`🏅  ${tr('progress')}`}
           variant="secondary"
           onPress={go(onProgress)}
+        />
+        <Button
+          testID="go-settings"
+          label={`⚙️  ${tr('settings')}`}
+          variant="secondary"
+          onPress={go(onSettings)}
         />
       </View>
 

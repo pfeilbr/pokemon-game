@@ -48,7 +48,7 @@ platform API rather than a fork of a rule:
 | Web Audio cues           | Taptic Engine (`expo-haptics`) | Reads better in one hand, and needs no audio assets — the no-bundled-media property survives. |
 | `prefers-reduced-motion` | `AccessibilityInfo`            | iOS does not honour it for free; the hit shake asks explicitly.                               |
 
-Navigation is a `switch` in `App.tsx`, not React Navigation. Six screens, no
+Navigation is a `switch` in `App.tsx`, not React Navigation. Seven screens, no
 deep links, no back stack worth preserving — a navigation library would add two
 more native modules to the iOS build to replace ten lines.
 
@@ -147,7 +147,9 @@ The game is complete and playable on the device:
   XP, the level-up, the evolution and each new badge by name.
 - **Album** — all eighteen creatures, un-caught ones as silhouettes.
 - **Progress** — badges, and per-skill maths accuracy and average time.
+- **Settings** — the language toggle (English/中文) and the sound switch, which
+  on this client is the master switch for haptics too. Both transitions are
+  exported as pure functions and tested without a renderer, so the claim under
+  test is "this changed one field of the save and nothing else".
 
-Not yet here: signing in and cross-device sync (see **Backend** above), and a
-settings screen for the language toggle — the language follows whatever the
-profile was created with.
+Not yet here: signing in and cross-device sync (see **Backend** above).
