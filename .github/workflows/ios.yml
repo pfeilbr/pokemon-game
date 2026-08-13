@@ -96,18 +96,17 @@ jobs:
         id: sim
         run: |
           set -euo pipefail
-          udid=$(xcrun simctl list devices available -j | python3 -c '
-import json, sys
-devices = json.load(sys.stdin)["devices"]
-for runtime in sorted(devices, reverse=True):
-    if "iOS" not in runtime:
-        continue
-    for device in devices[runtime]:
-        if device.get("isAvailable") and "iPhone" in device["name"]:
-            print(device["udid"])
-            raise SystemExit
-raise SystemExit("no available iPhone simulator")
-')
+          # Shell only: a multi-line python heredoc cannot start at column 0
+          # inside a YAML block scalar without terminating it.
+          udid=$(xcrun simctl list devices available \
+            | grep -E '^\s+iPhone' \
+            | head -1 \
+            | sed -E 's/.*\(([0-9A-Fa-f-]{36})\).*/\1/')
+          if [ -z "$udid" ]; then
+            echo "::error::no available iPhone simulator on this runner"
+            xcrun simctl list devices available
+            exit 1
+          fi
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
           xcrun simctl boot "$udid" || true
           xcrun simctl bootstatus "$udid" -b
