@@ -101,11 +101,24 @@ jobs:
         id: xcode
         working-directory: mobile/ios
         run: |
+          set -euo pipefail
           workspace=$(ls -d *.xcworkspace | head -1)
-          scheme=$(xcodebuild -workspace "$workspace" -list -json | python3 -c "import json,sys; print(json.load(sys.stdin)['workspace']['schemes'][0])")
+
+          # The app scheme is named after the workspace. Taking schemes[0]
+          # instead picks a Pods scheme, which builds every dependency happily
+          # and produces no .app at all - a green build with nothing to launch.
+          scheme="${workspace%.xcworkspace}"
+
+          echo "Schemes in $workspace:"
+          xcodebuild -workspace "$workspace" -list
+          if ! xcodebuild -workspace "$workspace" -list | sed 's/^[[:space:]]*//' | grep -qx "$scheme"; then
+            echo "::error::expected an app scheme named '$scheme' in $workspace"
+            exit 1
+          fi
+
           echo "workspace=$workspace" >> "$GITHUB_OUTPUT"
           echo "scheme=$scheme" >> "$GITHUB_OUTPUT"
-          echo "Building $scheme from $workspace"
+          echo "Building scheme '$scheme' from $workspace"
 
       # Pick a simulator the runner already has rather than creating one, which
       # avoids guessing at a device type / runtime pairing that may not exist.
