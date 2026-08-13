@@ -90,45 +90,76 @@ jobs:
           echo "scheme=$scheme" >> "$GITHUB_OUTPUT"
           echo "Building $scheme from $workspace"
 
-      - name: Build for the simulator (unsigned)
+      # Pick a simulator the runner already has rather than creating one, which
+      # avoids guessing at a device type / runtime pairing that may not exist.
+      - name: Boot a simulator
+        id: sim
+        run: |
+          set -euo pipefail
+          udid=$(xcrun simctl list devices available -j | python3 -c '
+import json, sys
+devices = json.load(sys.stdin)["devices"]
+for runtime in sorted(devices, reverse=True):
+    if "iOS" not in runtime:
+        continue
+    for device in devices[runtime]:
+        if device.get("isAvailable") and "iPhone" in device["name"]:
+            print(device["udid"])
+            raise SystemExit
+raise SystemExit("no available iPhone simulator")
+')
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$udid" || true
+          xcrun simctl bootstatus "$udid" -b
+          xcrun simctl list devices | grep "$udid"
+
+      - name: Build for the booted simulator (unsigned)
         working-directory: mobile/ios
         run: |
           set -o pipefail
+          # Build against the booted device rather than a generic destination.
+          # A generic destination builds every simulator arch including x86_64,
+          # but these runners are Apple Silicon and React Native ships prebuilt
+          # xcframeworks whose simulator slices are arm64 - so the x86_64 slice
+          # fails to link. ONLY_ACTIVE_ARCH keeps it to the native arch, which
+          # is also several minutes faster.
           xcodebuild \
             -workspace "${{ steps.xcode.outputs.workspace }}" \
             -scheme "${{ steps.xcode.outputs.scheme }}" \
             -configuration Debug \
-            -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
             -derivedDataPath build \
+            ONLY_ACTIVE_ARCH=YES \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            build
+            -quiet \
+            build 2>&1 | tee xcodebuild.log
 
-      - name: Boot a simulator, install and launch
+      # xcodebuild logs run to thousands of lines, so surface just the errors.
+      - name: Show build errors
+        if: failure()
+        working-directory: mobile/ios
+        run: grep -E "error:|fatal error:|The following build commands failed" -A3 xcodebuild.log | head -60 || true
+
+      - name: Install, launch and screenshot
         working-directory: mobile/ios
         run: |
           set -euo pipefail
-          app=$(find build/Build/Products -name '*.app' -maxdepth 3 | head -1)
-          echo "Built app: $app"
+          udid="${{ steps.sim.outputs.udid }}"
+          app=$(find build/Build/Products -maxdepth 3 -name '*.app' | head -1)
           bundle_id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
-          echo "Bundle id: $bundle_id"
+          echo "Launching $bundle_id from $app"
 
-          device=$(xcrun simctl create mathmon-ci com.apple.CoreSimulator.SimDeviceType.iPhone-16)
-          xcrun simctl boot "$device"
-          xcrun simctl bootstatus "$device" -b
-
-          xcrun simctl install "$device" "$app"
-          xcrun simctl launch "$device" "$bundle_id"
+          xcrun simctl install "$udid" "$app"
+          xcrun simctl launch "$udid" "$bundle_id"
 
           # Give the shell a moment to render before capturing it.
           sleep 12
-          xcrun simctl io "$device" screenshot launch.png
+          xcrun simctl io "$udid" screenshot launch.png
 
           # A crashed app leaves no running process; this is the real assertion.
-          if ! xcrun simctl spawn "$device" launchctl list | grep -q "$bundle_id"; then
+          if ! xcrun simctl spawn "$udid" launchctl list | grep -q "$bundle_id"; then
             echo "::error::App is not running after launch - it crashed on startup"
-            xcrun simctl diagnose -b --no-archive || true
             exit 1
           fi
           echo "App is running."
