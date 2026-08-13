@@ -1,138 +1,104 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import {
-  CREATURES,
-  ELEMENTS,
-  STRINGS,
-  effectiveness,
-  generateProblem,
-  starters,
-} from './src/engine';
-import { API_BASE_URL, type BackendStatus, fetchSession } from './src/api';
+import { useState } from 'react';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { GameProvider, useGame } from './src/game/GameContext';
+import { Album } from './src/screens/Album';
+import { BattleScreen } from './src/screens/BattleScreen';
+import { Home } from './src/screens/Home';
+import { Onboarding } from './src/screens/Onboarding';
+import { PickOpponent } from './src/screens/PickOpponent';
+import { ProgressScreen } from './src/screens/ProgressScreen';
+import { colors } from './src/theme';
 
 /**
- * The shell.
+ * The app root and its router.
  *
- * Deliberately not a literal "hello world": it exercises the two things that
- * actually carry risk on a new platform. First, that the shared game engine
- * resolves and runs under Metro and Hermes - the roster, the seeded maths
- * generator and the element wheel are all read live below. Second, that the
- * device can reach the same backend the web client uses.
- *
- * If this screen renders, the platform is proven and the game UI is the only
- * thing left to build.
+ * A hand-rolled screen switch rather than React Navigation. There are six
+ * screens, no deep links, no tabs, and no back stack worth preserving - the
+ * game's own "back" buttons are the navigation. A navigation library would add
+ * two more native modules and a prebuild surface to the iOS build for a `switch`
+ * statement's worth of behaviour.
  */
+
+type Screen =
+  | { name: 'home' }
+  | { name: 'pick' }
+  | { name: 'battle'; opponentId: string }
+  | { name: 'album' }
+  | { name: 'progress' };
+
+function Router() {
+  const { profile, loading } = useGame();
+  const [screen, setScreen] = useState<Screen>({ name: 'home' });
+
+  if (loading) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator color={colors.gold} size="large" />
+      </View>
+    );
+  }
+
+  // No save yet: sign-up is the whole app until there is one.
+  if (!profile) return <Onboarding />;
+
+  const home = () => setScreen({ name: 'home' });
+
+  switch (screen.name) {
+    case 'pick':
+      return (
+        <PickOpponent
+          profile={profile}
+          onChoose={(opponentId) => setScreen({ name: 'battle', opponentId })}
+          onBack={home}
+        />
+      );
+
+    case 'battle':
+      return (
+        <BattleScreen
+          // Remounts for a rematch, so each fight starts from a clean reducer.
+          key={`${screen.opponentId}:${profile.battlesWon + profile.battlesLost}`}
+          profile={profile}
+          opponentId={screen.opponentId}
+          onExit={() => setScreen({ name: 'pick' })}
+          onHome={home}
+        />
+      );
+
+    case 'album':
+      return <Album profile={profile} onBack={home} />;
+
+    case 'progress':
+      return <ProgressScreen profile={profile} onBack={home} />;
+
+    default:
+      return (
+        <Home
+          profile={profile}
+          onBattle={() => setScreen({ name: 'pick' })}
+          onAlbum={() => setScreen({ name: 'album' })}
+          onProgress={() => setScreen({ name: 'progress' })}
+        />
+      );
+  }
+}
+
 export default function App() {
-  const [status, setStatus] = useState<BackendStatus | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetchSession().then((result) => {
-      if (!cancelled) setStatus(result);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Read straight from the shared engine so a broken import fails visibly.
-  const roster = CREATURES.length;
-  const firstPartner = starters()[0]!;
-  const problem = generateProblem('mathmon-ios-shell', 4);
-  // Every element's multipliers across the whole wheel sum to exactly 7, which
-  // is the property that makes no element secretly the best one.
-  const wheelIsBalanced = ELEMENTS.every(
-    (element) => ELEMENTS.reduce((sum, other) => sum + effectiveness(element, other), 0) === 7,
-  );
-
   return (
-    <View style={styles.screen}>
-      <StatusBar style="light" />
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.eyebrow}>iOS client</Text>
-        <Text style={styles.title}>{STRINGS.appName.en}</Text>
-        <Text style={styles.subtitle}>{STRINGS.appName.zh}</Text>
-
-        <Section title="Shared game engine">
-          <Row label="Creatures loaded" value={String(roster)} ok={roster === 18} />
-          <Row
-            label="First starter"
-            value={`${firstPartner.name.en} · ${firstPartner.name.zh}`}
-            ok={firstPartner.stage === 1}
-          />
-          <Row label="Generated question" value={problem.prompt} ok={problem.answer >= 0} />
-          <Row
-            label="Element wheel balanced"
-            value={wheelIsBalanced ? 'yes' : 'no'}
-            ok={wheelIsBalanced}
-          />
-        </Section>
-
-        <Section title="Backend">
-          {status === null ? (
-            <ActivityIndicator color="#fbbf24" />
-          ) : status.kind === 'not-configured' ? (
-            <Row label="API" value="local-only (no URL set)" ok />
-          ) : status.kind === 'reachable' ? (
-            <>
-              <Row label="API" value={API_BASE_URL} ok />
-              <Row
-                label="Accounts"
-                value={status.session.accountsAvailable ? 'available' : 'local-only'}
-                ok
-              />
-            </>
-          ) : (
-            <Row label="API" value={status.reason} ok={false} />
-          )}
-        </Section>
-
-        <Text style={styles.footer}>
-          Engine and backend shared with the web client. Game UI comes next.
-        </Text>
-      </ScrollView>
-    </View>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.card}>
-      <Text style={styles.cardTitle}>{title}</Text>
-      {children}
-    </View>
-  );
-}
-
-function Row({ label, value, ok }: { label: string; value: string; ok: boolean }) {
-  return (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={[styles.rowValue, { color: ok ? '#34d399' : '#fb7185' }]} numberOfLines={1}>
-        {value}
-      </Text>
-    </View>
+    <SafeAreaProvider>
+      <GameProvider>
+        <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+          <StatusBar style="light" />
+          <Router />
+        </SafeAreaView>
+      </GameProvider>
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#0b1120' },
-  content: { padding: 20, paddingTop: 72, gap: 14 },
-  eyebrow: { color: '#64748b', fontSize: 12, fontWeight: '700', letterSpacing: 2 },
-  title: { color: '#ffffff', fontSize: 30, fontWeight: '900' },
-  subtitle: { color: '#94a3b8', fontSize: 17, marginBottom: 8 },
-  card: {
-    backgroundColor: '#131c33',
-    borderColor: '#223052',
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 16,
-    gap: 10,
-  },
-  cardTitle: { color: '#e2e8f0', fontSize: 13, fontWeight: '800', textTransform: 'uppercase' },
-  row: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
-  rowLabel: { color: '#94a3b8', fontSize: 14, flexShrink: 0 },
-  rowValue: { fontSize: 14, fontWeight: '700', flexShrink: 1, textAlign: 'right' },
-  footer: { color: '#475569', fontSize: 12, textAlign: 'center', marginTop: 6 },
+  screen: { flex: 1, backgroundColor: colors.bg },
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });

@@ -250,8 +250,12 @@ jobs:
             echo "No screenshot was captured, so there is nothing to read."
             exit 0
           fi
+          # The first screen is sign-up: the title, the tagline and the name
+          # prompt. Deliberately not asserting on the Chinese subtitle - Vision
+          # reads 小火星 as "JKE" often enough that it would be a flaky test
+          # about OCR rather than a real one about the app.
           swift ../scripts/assert-screenshot-text.swift launch.png \
-            "Mathmon" "Creatures loaded" "Element wheel balanced"
+            "Mathmon Battle League" "Catch monsters" "trainer name"
 
       - name: Upload launch screenshot
         if: always()

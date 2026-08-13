@@ -1,7 +1,8 @@
 # Mathmon — iOS client
 
-React Native on Expo SDK 57. Shares the web app's game engine rather than
-reimplementing it.
+React Native on Expo SDK 57. The whole game — sign-up, dashboard, opponent
+choice, battle, album, progress — running on the web app's engine rather than a
+reimplementation of it.
 
 ## The shared engine is the point
 
@@ -30,12 +31,28 @@ Two pieces of plumbing make it work:
 `src/engine.test.ts` guards the seam, including a check that no shared module
 has grown a Node or browser dependency that would break under Hermes.
 
+## What is native to this client
+
+Four things could not come across the seam, and each one is a deliberate
+substitution rather than a fork of a rule:
+
+| Web                         | iOS                            | Why                                                                                                                |
+| --------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| Inline `<svg>` creature art | `react-native-svg`             | Same viewBox, same path data, same `ArtSpec`. `src/ui/CreatureArt.test.ts` fails if a spec value loses its branch. |
+| `localStorage`              | `AsyncStorage`                 | Same key, same `normaliseProfile` repair at the boundary.                                                          |
+| Web Audio cues              | Taptic Engine (`expo-haptics`) | Reads better in one hand, and needs no audio assets — the "no bundled media" property survives.                    |
+| `prefers-reduced-motion`    | `AccessibilityInfo`            | iOS does not honour it for free; the hit shake asks explicitly.                                                    |
+
+Navigation is a `switch` in `App.tsx`, not React Navigation. Six screens, no
+deep links, no back stack worth preserving — a navigation library would add two
+more native modules to the iOS build to replace ten lines.
+
 ## Commands
 
 ```bash
 npm install
 npm run typecheck
-npm test           # shared-engine seam + API client contract
+npm test           # engine seam, art port, storage, battle flow, API contract
 npm run bundle     # real Metro bundle for iOS, runs anywhere including Linux
 npm run ios        # needs macOS + Xcode
 ```
@@ -45,16 +62,17 @@ shared engine included, to Hermes bytecode and fails on any bad import.
 
 ## Backend
 
-Points at the same Next.js API as the web client, so accounts and saved
-progress are shared rather than forked. The base URL is build-time
+The game is fully playable with no network: the profile lives on the device,
+exactly as the web client behaves with no database attached.
+
+`src/api.ts` is the seam to the same Next.js API the web client uses, and its
+contract is tested — but **nothing on this client signs in or syncs yet**. That
+is the next feature, not a missing piece of this one. The base URL is build-time
 configuration, never hardcoded:
 
 ```bash
 EXPO_PUBLIC_API_URL=https://your-deployment.vercel.app npm run bundle
 ```
-
-With none set the app runs local-only, mirroring how the web app behaves with
-no database attached.
 
 ## Building and signing
 
@@ -80,7 +98,7 @@ green run that had proven nothing:
 - **It reads the pixels back.** `scripts/assert-screenshot-text.swift` runs
   Vision OCR over the screenshot and requires the app's own strings to be on
   it. "The process is still alive" is a weak claim: a redbox is alive, and so
-  is a blank screen. Only the OCR distinguishes *running* from *working*.
+  is a blank screen. Only the OCR distinguishes _running_ from _working_.
 
 The runner image matters: Expo SDK 57 ships a Swift package declaring
 `swift-tools-version 6.2`, so the build needs Xcode 26 or newer. On the
@@ -107,13 +125,24 @@ reuse them afterwards.
 
 ## Status
 
-![The iOS shell running on a simulator](docs/ios-shell.png)
+![The iOS app on a simulator](docs/ios-shell.png)
 
 That screenshot is not a mockup. It was captured by the `simulator` job on a
-GitHub macOS runner, from a Release build with the JavaScript bundle embedded,
-and every value on it was read live from the shared engine at render time.
+GitHub macOS runner, from a Release build with the JavaScript bundle embedded.
 
-The current screen is a shell: it reads the roster, the seeded maths generator
-and the element wheel live from the shared engine, and calls `/api/session`. It
-is deliberately not a literal "hello world" — it exercises exactly the things
-that carry risk on a new platform. The game UI is next.
+The game is complete and playable on the device:
+
+- **Sign-up** — trainer name, then the six starters on their own screen.
+- **Dashboard** — partner in its current evolved form, XP bar, maths level,
+  day streak, album completion.
+- **Opponent choice** — three level-appropriate opponents, each labelled with
+  the net matchup verdict, and the whole element wheel one tap away.
+- **Battle** — four-move kit, on-screen keypad, the draining speed meter,
+  combo and charge, the catch question, then a result screen that names the
+  XP, the level-up, the evolution and each new badge by name.
+- **Album** — all eighteen creatures, un-caught ones as silhouettes.
+- **Progress** — badges, and per-skill maths accuracy and average time.
+
+Not yet here: signing in and cross-device sync (see **Backend** above), and a
+settings screen for the language toggle — the language follows whatever the
+profile was created with.

@@ -95,6 +95,14 @@ or browser dependency that would break under Hermes.
 So: a rule change belongs in `src/lib/game/` and lands on both clients at once.
 Never fork a rule into a client.
 
+What the iOS client does own is presentation, and four things it cannot share:
+`react-native-svg` in place of inline `<svg>` (same viewBox, same path data),
+`AsyncStorage` in place of `localStorage` (same key, same `normaliseProfile` at
+the boundary), the Taptic Engine in place of Web Audio, and an explicit
+`AccessibilityInfo` check where the web gets `prefers-reduced-motion` from CSS.
+Each is a substitution for a platform API, never for a rule. `mobile/README.md`
+tabulates them.
+
 ### Why the engine is pure
 
 Every function in `src/lib/game/` is deterministic given its inputs. Randomness
