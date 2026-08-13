@@ -98,7 +98,8 @@ Never fork a rule into a client.
 
 The creature art is shared the same way the rules are. `art.ts` emits a
 `Drawing` — primitive shapes and gradients, no SVG and no DOM — and each client
-has a ~40-line renderer that maps a primitive onto its own surface. The geometry
+has a thin renderer whose whole job is a 45-line switch mapping each
+primitive onto its own surface. The geometry
 used to be written out once per client and hand-ported, which made "this
 creature quietly lost its crown on iOS" a real and invisible bug, because a
 missing branch draws nothing and nothing looks like art.
@@ -121,7 +122,7 @@ That buys three things:
 - A battle replays exactly in a test. There is no "sometimes it crits".
 - A battle can be serialised to JSON mid-fight and resumed.
 - Balance can be proven rather than play-tested by hand. The suite simulates all
-  36 starter matchups and asserts properties about the outcomes.
+  144 starter matchups and asserts properties about the outcomes.
 
 If you find yourself reaching for `Date.now()` or `Math.random()` inside
 `src/lib/game/`, that is the signal you are putting a rule in the wrong place.
@@ -134,7 +135,7 @@ _because_ a test caught the opposite behaviour.
 **A wrong answer deals flat chip damage — no type bonus, no combo, no speed.**
 An earlier version scaled a miss like a normal hit. With a 2× type advantage
 that was enough to win a fight while answering every single question wrong.
-Maths has to be the win condition. `battle.test.ts` sweeps all 36 matchups to
+Maths has to be the win condition. `battle.test.ts` sweeps all 144 matchups to
 guard this.
 
 **The element wheel is provably symmetric.** Each element is strong against the

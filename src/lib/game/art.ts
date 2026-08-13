@@ -13,7 +13,7 @@ import type { ArtSpec, Creature } from './creatures';
  * This module emits a `Drawing`: a list of primitive shapes and the gradients
  * they reference. It knows nothing about SVG, the DOM or React Native. Each
  * client has a small renderer that maps a primitive onto its own drawing
- * surface - about forty lines each.
+ * surface - a 45-line switch on each side.
  *
  * That split exists because the geometry used to be written out twice, once per
  * client, and hand-ported between them. A creature could quietly lose its crown

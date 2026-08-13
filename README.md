@@ -227,8 +227,8 @@ The game rules live in `src/lib/game/` as pure, seeded, deterministic
 functions — no React, no clock, no I/O. Randomness comes from explicit seeds and
 the current time is passed _into_ the battle reducer. That means a battle
 replays exactly in a test, can be serialised mid-fight, and lets balance be
-**proven** rather than eyeballed: the suite simulates all 36 starter matchups and
-asserts properties about the outcomes.
+**proven** rather than eyeballed: the suite simulates all 144 starter matchups
+and asserts properties about the outcomes.
 
 Two real design bugs were caught that way and are now regression-guarded:
 

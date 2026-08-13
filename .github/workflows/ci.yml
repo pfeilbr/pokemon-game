@@ -55,6 +55,20 @@ jobs:
 
       - run: npm ci
 
+      # README.md, CLAUDE.md and mobile/README.md are full of checkable numbers,
+      # and numbers drift. The roster doubled from 18 creatures to 36 and the
+      # stale counts had to be chased across three files by hand - one was missed
+      # and only caught later in review. CLAUDE.md is the contributor contract,
+      # so a wrong number there is a wrong instruction. Every claim is now
+      # re-derived from the source on each run rather than restated.
+      #
+      # Unlike the two audits above this one needs `npm ci` first: it runs the
+      # real engine through the repo's own esbuild to read values that exist
+      # nowhere as a literal - the roster is built by `buildRoster()`, and the
+      # element multiplier sum is the output of `effectiveness`, not a constant.
+      - name: Documentation audit (claims vs. source)
+        run: python3 scripts/audit_docs.py
+
       - name: Typecheck
         run: npm run typecheck
 

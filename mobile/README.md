@@ -34,9 +34,9 @@ has grown a Node or browser dependency that would break under Hermes.
 ## What is native to this client
 
 The creature art crosses the seam too. `src/lib/game/art.ts` emits primitive
-shapes and gradients — no SVG, no DOM — and `src/ui/CreatureArt.tsx` is a
-~40-line mapper onto `react-native-svg`. The web client's renderer is the same
-forty lines against inline `<svg>`. Adding a creature or a new crown shape lands
+shapes and gradients — no SVG, no DOM — and `src/ui/CreatureArt.tsx` maps them
+onto `react-native-svg` in a 45-line switch. The web client's renderer is the
+same switch against inline `<svg>`. Adding a creature or a new crown shape lands
 on both clients with no port and no image.
 
 Three things genuinely could not cross, and each is a substitution for a
