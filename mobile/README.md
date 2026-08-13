@@ -145,7 +145,7 @@ The game is complete and playable on the device:
 - **Battle** — four-move kit, on-screen keypad, the draining speed meter,
   combo and charge, the catch question, then a result screen that names the
   XP, the level-up, the evolution and each new badge by name.
-- **Album** — all eighteen creatures, un-caught ones as silhouettes.
+- **Album** — all 36 creatures grouped by element, un-caught ones as silhouettes.
 - **Progress** — badges, and per-skill maths accuracy and average time.
 - **Settings** — the language toggle (English/中文) and the sound switch, which
   on this client is the master switch for haptics too. Both transitions are
