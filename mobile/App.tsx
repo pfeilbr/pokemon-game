@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Linking, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { CrashBoundary } from './src/CrashBoundary';
 import { GameProvider, useGame } from './src/game/GameContext';
@@ -113,9 +113,62 @@ function Router({ screen, setScreen }: { screen: Screen; setScreen: (screen: Scr
  * first. That mirrors the web, where `reset()` re-renders the crashed route and
  * the Home link navigates away from it.
  */
+/**
+ * `mathmon://screen/album`, `mathmon://screen/battle?opponent=vinari`.
+ *
+ * A deep link selects a screen and can do nothing else. It deliberately cannot
+ * carry state: `simctl` can open a URL but cannot tap, so this is how
+ * `mobile/scripts/capture_screens.sh` walks the app through its screens for
+ * `mobile/docs/screens/` - but a link that could write the save would be a hole
+ * in a child's album for the life of the app, to save the harness twenty lines.
+ * The seeded save the harness needs goes in through the filesystem instead.
+ *
+ * Exported and pure, so it is tested without a renderer.
+ */
+const SCREEN_LINK = /^[a-z][a-z0-9+.-]*:\/\/screen\/([a-z]+)(?:\?opponent=([a-z-]+))?$/;
+
+export function screenFromUrl(url: string | null): Screen | null {
+  if (!url) return null;
+  const match = SCREEN_LINK.exec(url);
+  if (!match) return null;
+  const [, name, opponentId] = match;
+  switch (name) {
+    case 'home':
+      return { name: 'home' };
+    case 'pick':
+      return { name: 'pick' };
+    case 'album':
+      return { name: 'album' };
+    case 'progress':
+      return { name: 'progress' };
+    case 'settings':
+      return { name: 'settings' };
+    case 'signin':
+      return { name: 'signin' };
+    // A battle needs an opponent; a link without one navigates nowhere rather
+    // than starting an arbitrary fight.
+    case 'battle':
+      return opponentId ? { name: 'battle', opponentId } : null;
+    default:
+      return null;
+  }
+}
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>({ name: 'home' });
   const goHome = useCallback(() => setScreen({ name: 'home' }), []);
+
+  // Lives here rather than in Router, which has early returns above the point a
+  // hook could sit, and which does not own `screen`.
+  useEffect(() => {
+    const open = (url: string | null) => {
+      const next = screenFromUrl(url);
+      if (next) setScreen(next);
+    };
+    void Linking.getInitialURL().then(open);
+    const subscription = Linking.addEventListener('url', (event) => open(event.url));
+    return () => subscription.remove();
+  }, []);
 
   return (
     <SafeAreaProvider>

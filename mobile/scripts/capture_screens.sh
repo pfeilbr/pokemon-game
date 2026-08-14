@@ -117,7 +117,10 @@ SCREENS=(
   # rather than a default fight being started.
   "04-battle|played-en|screen/battle?opponent=vinari|wild creature appeared|Pick your move|Vinari"
   "05-album|played-en|screen/album|Creature album|Ember"
-  "06-progress|played-en|screen/progress|Your progress|Maths skills|Badges"
+  # Only strings from the top of each ScrollView: `simctl` photographs the
+  # visible frame, so an assertion on something below the fold would be a test
+  # about scroll position rather than about the screen.
+  "06-progress|played-en|screen/progress|Your progress|Maths skills"
   "07-settings|played-en|screen/settings|Settings|Language|Sound"
   "08-sign-in|played-en|screen/signin|Sign in to save|4-digit PIN"
   # The Chinese pair is seeded from a profile identical to the English one

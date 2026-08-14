@@ -53,6 +53,17 @@ jobs:
       - name: iOS contrast audit (WCAG ratios on the React Native client)
         run: python3 mobile/scripts/audit_contrast_ios.py
 
+      # A capture of a redbox photographs exactly as well as a capture of the
+      # game - which this repo has already shipped once. Decodes the committed
+      # PNGs far enough to catch a blank, truncated, mis-sized or duplicated
+      # one, and to catch a "Chinese" capture that is really an English screen.
+      # No simulator, no Xcode, stdlib only.
+      - name: iOS capture audit (the committed screens are real and distinct)
+        run: python3 mobile/scripts/audit_ios_screenshots.py
+
+      - name: The capture harness still parses
+        run: bash -n mobile/scripts/capture_screens.sh
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -83,7 +94,7 @@ jobs:
     # Expo SDK 57 needs Swift 6.2 (see the toolchain step below), which ships
     # with Xcode 26. The macos-15 image tops out at Xcode 16.4 / Swift 6.1.
     runs-on: macos-26
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -282,6 +293,27 @@ jobs:
           # about OCR rather than a real one about the app.
           swift ../scripts/assert-screenshot-text.swift launch.png \
             "Mathmon Battle League" "Catch monsters" "trainer name"
+
+      # The launch shot proves the app runs. This walks it through every screen
+      # and reads each one back with the same Vision script, which is what makes
+      # a picture of the album evidence rather than decoration. Writes to
+      # RUNNER_TEMP, never the worktree: a human commits the artifact, so CI
+      # never pushes pixels and audit_assets never sees a stray PNG.
+      - name: Capture the app's screens
+        working-directory: mobile/ios
+        run: |
+          set -euo pipefail
+          app=$(find build/Build/Products/Release-iphonesimulator -maxdepth 1 -type d -name '*.app' | head -1)
+          ../scripts/capture_screens.sh "${{ steps.sim.outputs.udid }}" "$app" "$RUNNER_TEMP/ios-screens"
+
+      - name: Upload the captured screens
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-screens
+          path: ${{ runner.temp }}/ios-screens
+          retention-days: 14
+          if-no-files-found: warn
 
       - name: Upload launch screenshot
         if: always()

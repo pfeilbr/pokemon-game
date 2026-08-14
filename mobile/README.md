@@ -48,8 +48,10 @@ platform API rather than a fork of a rule:
 | Web Audio cues           | Taptic Engine (`expo-haptics`) | Reads better in one hand, and needs no audio assets — the no-bundled-media property survives. |
 | `prefers-reduced-motion` | `AccessibilityInfo`            | iOS does not honour it for free; the hit shake asks explicitly.                               |
 
-Navigation is a `switch` in `App.tsx`, not React Navigation. Eight screens, no
-deep links, no back stack worth preserving — a navigation library would add two
+Navigation is a `switch` in `App.tsx`, not React Navigation. Eight screens, one
+deep link (`mathmon://screen/<name>`, which the screenshot harness drives and
+which can do nothing a button cannot), no back stack worth preserving — a
+navigation library would add two
 more native modules to the iOS build to replace ten lines.
 
 ### When the game trips over
