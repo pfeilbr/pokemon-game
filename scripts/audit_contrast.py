@@ -585,15 +585,15 @@ def class_colour(token: str, prefix: str, palette: Palette) -> Rgba | None:
     alpha = 1.0
     if "/" in rest:
         rest, _, opacity = rest.rpartition("/")
-        if opacity.startswith("[") and opacity.endswith("]"):
-            opacity = opacity[1:-1]
+        # Tailwind writes an opacity modifier as a percentage (`/80`), or in
+        # square brackets as a raw alpha (`/[0.03]`). Deciding by the brackets
+        # rather than by "is it <= 1" keeps `/1` meaning one per cent.
+        bracketed = opacity.startswith("[") and opacity.endswith("]")
         try:
-            value = float(opacity)
+            value = float(opacity[1:-1] if bracketed else opacity)
         except ValueError:
             return None
-        # Tailwind writes an opacity modifier as a percentage (`/80`) or, in
-        # square brackets, as a fraction (`/[0.03]`).
-        alpha = value if value <= 1.0 else value / 100
+        alpha = value if bracketed else value / 100
 
     if rest.startswith("[") and rest.endswith("]"):
         inner = rest[1:-1]

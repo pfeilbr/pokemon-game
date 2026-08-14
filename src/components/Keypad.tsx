@@ -1,6 +1,27 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
+
+/**
+ * Whether this device has a pointer that can rest on things - the closest the
+ * platform gets to "there is probably a keyboard attached".
+ *
+ * Module scope, not inline: `useSyncExternalStore` compares snapshots by
+ * identity, so a fresh closure per render would loop forever.
+ */
+const POINTER_QUERY = '(hover: hover) and (pointer: fine)';
+
+function subscribeToPointer(onChange: () => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const media = window.matchMedia(POINTER_QUERY);
+  media.addEventListener('change', onChange);
+  return () => media.removeEventListener('change', onChange);
+}
+
+function hasFinePointer(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia(POINTER_QUERY).matches;
+}
 
 /**
  * The answer keypad.
@@ -132,12 +153,14 @@ export function Keypad({
 
   // Claimed only where it is true. A phone has no keyboard to point at, and
   // this screen belongs to a seven-year-old, so an unusable tip is clutter.
-  // Resolved after mount rather than during render, so the server and the
-  // first client render agree.
-  const [hasKeyboard, setHasKeyboard] = useState(false);
-  useEffect(() => {
-    setHasKeyboard(window.matchMedia('(hover: hover) and (pointer: fine)').matches);
-  }, []);
+  //
+  // `useSyncExternalStore` rather than setState-in-an-effect: the server
+  // snapshot is `false`, so the server and the first client render agree and
+  // there is no hydration mismatch, without the cascading render an effect
+  // that sets state on mount causes. It also keeps the tip honest if the
+  // answer changes under us - an iPad in a keyboard case is exactly this
+  // child's device, and detaching it should retract the tip.
+  const hasKeyboard = useSyncExternalStore(subscribeToPointer, hasFinePointer, () => false);
 
   const keyClass =
     'tap flex items-center justify-center rounded-2xl bg-slate-800/90 text-3xl font-extrabold text-white ' +

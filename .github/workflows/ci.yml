@@ -71,6 +71,14 @@ jobs:
       - name: API surface audit (body limits, throttling, cookies, leaks)
         run: python3 scripts/audit_api.py
 
+      # A screenshot suite that photographs a blank rectangle passes exactly as
+      # happily as one that photographs the game - and this repo has already
+      # shipped a green iOS run that was photographing a redbox. Decodes the
+      # committed PNGs far enough to catch a flat or truncated capture, without
+      # needing a browser, so it runs on every push for nothing.
+      - name: Screenshot audit (the docs images are real, current and complete)
+        run: python3 scripts/audit_screenshots.py
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -128,6 +136,18 @@ jobs:
       # lost to a settings switch. 126 of 216 seeded divergences were lossy.
       - name: Sync audit (a merge never costs a child what he earned)
         run: python3 scripts/audit_sync.py
+
+      # Nothing checked whether a child could read the screen. Six element
+      # palettes, coloured meters and a lot of slate on a dark theme: the
+      # failure nobody notices on a good monitor and every child hits in a
+      # sunlit car. The submit key was white on emerald at 1.94:1, and the
+      # button that deletes the album was 2.86:1.
+      #
+      # Needs node_modules because it derives the palette from the installed
+      # Tailwind rather than hardcoding 287 hex values, converting OKLCH to
+      # sRGB itself. Exits 2 rather than passing if that package is missing.
+      - name: Contrast audit (WCAG ratios for the real colour pairs)
+        run: python3 scripts/audit_contrast.py
 
       - name: Typecheck
         run: npm run typecheck
