@@ -77,6 +77,13 @@ const PROMPT_TYPE = {
    * `App.tsx` takes only the top and bottom edges.
    */
   gutter: 50,
+  /**
+   * `narrowest - gutter`, written out because `scripts/audit_prompt_fit.py`
+   * reads this file as text rather than running it. The audit re-derives both
+   * this and `gutter` from `mobile/src/theme.ts`, so a padding change that made
+   * them wrong is a failure rather than a stale comment.
+   */
+  narrowLineBox: 270,
 } as const;
 
 export function BattleScreen({

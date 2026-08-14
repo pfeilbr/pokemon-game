@@ -13,7 +13,17 @@ export const colors = {
   panelEdge: '#223052',
   text: '#ffffff',
   muted: '#94a3b8',
-  faint: '#64748b',
+  /**
+   * The quiet label colour. It used to be `#64748b` - slate-500 - which is the
+   * same colour, and the same mistake, the web client was carrying in thirteen
+   * places. `mobile/scripts/audit_contrast_ios.py` measured it at 2.99:1 on a
+   * frost-tinted opponent card, 3.28:1 on a locked badge and 3.55:1 on a plain
+   * panel, against the 4.5:1 that normal text owes a child reading in a sunlit
+   * car. This is the darkest grey that still clears 4.5:1 on every surface it
+   * is used on with room to spare, so it stays quieter than `muted` without
+   * becoming decoration.
+   */
+  faint: '#8a97aa',
   good: '#34d399',
   bad: '#fb7185',
   gold: '#fbbf24',
@@ -37,4 +47,32 @@ export function tint(hex: string, alpha: number): string {
     .toString(16)
     .padStart(2, '0');
   return `${hex}${a}`;
+}
+
+/**
+ * Blends `hex` into `base` by `weight` and returns an **opaque** `#rrggbb`.
+ *
+ * The difference from `tint` is the whole point. A translucent tint takes its
+ * lightness from whatever it was dropped onto, so a surface built with `tint`
+ * is a different colour on a plain panel than on an element-glowed one - and
+ * when the label written on it is the very colour doing the tinting, as an
+ * element chip's is, the contrast moves with it. The same Stone chip measured
+ * 4.39:1 on the app background and 2.95:1 on the frost-glowed album card.
+ *
+ * Mixing to an opaque colour instead makes a chip read identically everywhere,
+ * which is what lets `audit_contrast_ios.py` prove all six elements clear
+ * 4.5:1 once rather than argue about it per screen. The web client's
+ * `ElementChip` reaches the same place with `color-mix(in srgb, … 12%,
+ * var(--color-ink))`; this is that, in a language without `color-mix`.
+ */
+export function mix(hex: string, weight: number, base: string): string {
+  const w = Math.min(1, Math.max(0, weight));
+  const channel = (at: number) => {
+    const top = parseInt(hex.slice(at, at + 2), 16);
+    const bottom = parseInt(base.slice(at, at + 2), 16);
+    return Math.round(top * w + bottom * (1 - w))
+      .toString(16)
+      .padStart(2, '0');
+  };
+  return `#${channel(1)}${channel(3)}${channel(5)}`;
 }

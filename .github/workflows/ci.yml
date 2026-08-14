@@ -130,6 +130,16 @@ jobs:
       - name: Battle replay audit (deterministic, resumable, JSON-total)
         run: python3 scripts/audit_replay.py
 
+      # The chess strand tripled the longest prompt, from `(9 x 9) + 20` at
+      # twelve characters to `(9 + 5) - (3 + 1)` in chess glyphs at 21. It
+      # wrapped onto two lines on every phone, and the harder case turned out to
+      # be a LAPTOP: above `lg` the battle splits into two columns, so a wide
+      # screen gives the prompt a narrower box while using the largest type.
+      # A question split mid-expression is not the question the engine asked,
+      # and the speed meter is draining while a child works out what he sees.
+      - name: Prompt fit audit (no maths question ever wraps)
+        run: python3 scripts/audit_prompt_fit.py
+
       # Last-write-wins used to discard the loser whole, and it did not take a
       # broken clock to lose an album - toggling the language on the laptop
       # bumped `updatedAt` without earning anything, so the tablet's afternoon

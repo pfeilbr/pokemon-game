@@ -41,6 +41,18 @@ jobs:
       - name: Cross-client parity audit (no forked rules, no missing primitives)
         run: python3 mobile/scripts/audit_parity.py
 
+      # The web contrast audit found the submit key at 1.94:1. This client
+      # shares the same six palettes and the same visual language, and nothing
+      # had ever checked it: 17 violations were live, including that same submit
+      # key at 2.54:1 and `colors.faint` being slate-500 across ten call sites.
+      #
+      # It imports the WCAG arithmetic from the web audit rather than restating
+      # it - a second copy of the formula could disagree with the one the other
+      # client is graded by, which is the whole failure mode being guarded here.
+      # Reads 14 source files as text and touches node_modules zero times.
+      - name: iOS contrast audit (WCAG ratios on the React Native client)
+        run: python3 mobile/scripts/audit_contrast_ios.py
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22

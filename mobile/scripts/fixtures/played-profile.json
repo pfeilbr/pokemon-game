@@ -3,16 +3,7 @@
   "trainerName": "Leo",
   "starterId": "cindik",
   "xp": 900,
-  "caught": [
-    "cindik",
-    "blazur",
-    "sproutle",
-    "bublet",
-    "zaplet",
-    "pebblo",
-    "flurro",
-    "splashen"
-  ],
+  "caught": ["cindik", "blazur", "sproutle", "bublet", "zaplet", "pebblo", "flurro", "splashen"],
   "badges": ["first-win", "combo-5", "collector-6", "ten-wins", "tier-5", "evolved"],
   "battlesWon": 14,
   "battlesLost": 3,

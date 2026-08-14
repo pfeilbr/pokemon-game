@@ -142,8 +142,11 @@ LAUNCH_SETTLE_SECONDS=12
 NAVIGATE_SETTLE_SECONDS=3
 # Screens that animate in (the hit shake, the speed meter) can be caught
 # mid-frame, and a cold simulator occasionally needs longer than the settle
-# above. Re-screenshot rather than sleeping longer for everyone.
-CAPTURE_ATTEMPTS=5
+# above. Re-screenshot rather than sleeping longer for everyone. Kept low
+# because each attempt runs the Vision script, and `swift file.swift` compiles
+# before it runs - the retries are the expensive part of this script, not the
+# screenshots.
+CAPTURE_ATTEMPTS=3
 RETRY_SECONDS=3
 
 die() {
@@ -297,7 +300,10 @@ capture() {
     fi
 
     attempt=$((attempt + 1))
-    [ "$attempt" -le "$CAPTURE_ATTEMPTS" ] && sleep "$RETRY_SECONDS"
+    # An `&&` here would be a bug rather than shorthand: on the last attempt the
+    # test fails, the AND-list exits non-zero, and `set -e` kills the script
+    # before the OCR log below is ever printed.
+    if [ "$attempt" -le "$CAPTURE_ATTEMPTS" ]; then sleep "$RETRY_SECONDS"; fi
   done
 
   echo "--- OCR output for $name (last of $CAPTURE_ATTEMPTS attempts) ---" >&2
@@ -359,7 +365,10 @@ for record in "${SCREENS[@]}"; do
     current_phase="$phase"
   fi
 
-  [ -n "$link" ] && navigate "$link"
+  # Same trap as above, and this one is worse: the sign-up record has no deep
+  # link, so `[ -n "$link" ] && navigate` would end the run under `set -e`
+  # before a single screen was captured.
+  if [ -n "$link" ]; then navigate "$link"; fi
   capture "$name" "${expected[@]}"
 done
 

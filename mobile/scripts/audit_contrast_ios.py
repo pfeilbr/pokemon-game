@@ -92,18 +92,23 @@ different in five ways that matter:
    goes to NEEDS REVIEW, because the only text in this client that does it is
    an emoji, which brings its own colours.
 
-4. **Backgrounds are opaque surfaces, not a body gradient.** There is one root
-   surface (`App.tsx`'s `SafeAreaView`), so no "two roots" guess is needed for
-   a screen. Shared widgets under `src/ui/` are the exception: they are dropped
-   onto the bare app background, onto a `Panel`, and onto an element-glowed
-   `Panel`, so all of those are candidates and the worst wins.
+4. **Backgrounds are opaque surfaces, not a body gradient.** The web page is
+   `--color-ink` under two radial gradients, so the web audit has to guess at
+   "two roots" and try a component against both. Here there is exactly one
+   root, `App.tsx`'s `SafeAreaView`, and every surface above it is an opaque or
+   alpha-composited `backgroundColor` that can be computed.
 
-5. **A component's surface is a component, not a utility class.** `<Panel>` is
-   a real element in the tree, so its surface is composited when the walk
-   crosses it - including `glow`, whose tint alpha is read out of `kit.tsx`
-   rather than restated. A `style` prop forwarded into a component's root view
-   is resolved from that component's actual call sites, not assumed to be
-   empty.
+5. **A component's ground is derived, not guessed.** `<Panel>` is a real
+   element in the tree, so its surface - including a `glow` whose tint alpha is
+   read out of `kit.tsx` rather than restated - is composited when the walk
+   crosses it. And because every component is a node somewhere, the surface a
+   component renders on is *found* rather than assumed: every call site records
+   the ground behind it and the walk is repeated to a fixed point. A first
+   draft that guessed instead ("a screen is on the app background, `src/ui/` is
+   on anything") was wrong in both directions in the same run - `SpeedMeter`
+   measured 3.96:1 where a child reads 3.55:1, and `Keypad` was judged against
+   an element-glowed Panel it is never inside. A `style` prop forwarded into a
+   component's root view is resolved from its real call sites too.
 
 Correlated branches
 -------------------
@@ -118,14 +123,28 @@ colors.good : ...` in `HealthBar`.
 So every colour carries a *binding*: a set of (name, value) assignments such as
 `{style=stone}` or `{active=true}`. Two colours are only ever compared when
 their bindings agree on every name they share, and each finding prints the
-binding it was found under.
+binding it was found under. Two shapes needed handling that the web's class
+lists do not produce:
 
-The one place this script is deliberately stricter than the source is a shared
-widget's surface: `<ElementChip>` in `kit.tsx` cannot see which `<Panel glow=`
-it was dropped into, so all six glows are tried against all six chips. That
-errs towards demanding more contrast than one call site strictly needs, which
-is the only direction an audit may err in - and the fix that makes a chip
-opaque removes the dependency entirely rather than arguing about it.
+- `has ? styles.badgeEarned : styles.badgeLocked` on a badge and `!has && {
+  color: colors.faint }` on its label are one unknown written two ways, so the
+  `!` is normalised away and carried in the truth value. Without that, a locked
+  label was paired with an earned background at 2.73:1 - a badge that cannot
+  render.
+- `variant === 'primary' && styles.buttonPrimary` beside `variant === 'ghost'
+  && styles.buttonGhost` are three booleans that cannot all be true. A true
+  `x === 'a'` branch therefore also binds `x` to `'a'`, which makes the
+  impossible combination incompatible. Without that, a `Button` took a gold
+  background and a transparent one at once and its dark label measured 1.01:1.
+
+Where this is still stricter than the source is across a component boundary: an
+`<ElementChip element={detail.element}>` inside a `<Panel glow={
+ELEMENT_STYLE[detail.element].color}>` is *one* element, but the chip's own
+binding lives in `kit.tsx` and the panel's in `Album.tsx`, so all six glows are
+tried against all six chips. That errs towards demanding more contrast than a
+call site strictly needs, which is the only direction an audit may err in - and
+making the chip opaque removes the dependency entirely rather than arguing
+about it.
 
 What static analysis can and cannot prove
 -----------------------------------------
@@ -1006,6 +1025,11 @@ class FileScope:
     sheets: dict[str, dict[str, str]]
     consts: dict[str, list[str]]
     forwarded: list[tuple[Binding, dict[str, str]]]
+    # Every component this audit knows the source of, and - during the
+    # surface-resolution rounds - where to record the ground each one is
+    # rendered on. `None` on the final, reporting pass.
+    components: set[str] = field(default_factory=set)
+    collect: "dict[str, list[tuple[Binding, RGB]]] | None" = None
 
 
 def judge(
@@ -1027,9 +1051,14 @@ def judge(
         scope.report.note(scope.rel, line, check, f"{label} has no resolvable colour pair")
         return
     ratio, text_colour, background, binding = worst
+    # An element chip's label is the one text in this client written in a
+    # palette colour, and it is worth naming separately because the fix for it
+    # is a palette fix, not a stylesheet one. Decided by the *colour*, not by
+    # the binding: a slate label that merely happens to sit on an element-
+    # tinted card is an ordinary text failure.
     named = (
         "element-contrast"
-        if check == "text-contrast" and any(name in scope.palette.elements for _, name in binding)
+        if check == "text-contrast" and text_colour in scope.palette.elements.values()
         else check
     )
     scope.report.pairs.append((f"{scope.rel}:{line}", f"{label}{show(binding)}", ratio, minimum, rule))
@@ -1050,6 +1079,25 @@ def judge(
 
 def visit(node: Node, parent: Context, scope: FileScope) -> None:
     palette, report = scope.palette, scope.report
+
+    # A call site of a component declared elsewhere in this client: record the
+    # ground *behind* it, before anything that component paints itself. Each
+    # recorded surface is one atom of one unknown ("which of its call sites is
+    # this"), so a caller's own binding names - `style`, `has`, `active` -
+    # cannot leak in and accidentally constrain the component's own.
+    if scope.collect is not None and node.tag in scope.components and parent.unresolved is None:
+        into = scope.collect.setdefault(node.tag, [])
+        for binding, surface in parent.backgrounds:
+            # Keep the caller's *own* branch names (`style=aqua` tells you
+            # which glow this is) but drop the chain of enclosing call sites,
+            # which nests one binding inside another until a finding is a
+            # paragraph.
+            local = frozenset((k, v) for k, v in binding if not k.startswith("where "))
+            label = f"{scope.rel}:{node.line}{show(local)}"
+            entry = (frozenset({(f"where {node.tag} is rendered", label)}), surface)
+            if entry not in into:
+                into.append(entry)
+
     flats = flatten_style(node.attrs, scope.sheets, scope.forwarded)
 
     # When branches disagree about size or weight the smallest of each is used:
@@ -1238,43 +1286,67 @@ def visit(node: Node, parent: Context, scope: FileScope) -> None:
 # The element chips, asserted of the palette rather than of a file
 # --------------------------------------------------------------------------
 
-CHIP = re.compile(
-    r"export function ElementChip\([\s\S]*?<View style=\{\[styles\.chip,\s*\{\s*backgroundColor:\s*([^}]*?)\s*\}\]\}>"
-    r"[\s\S]*?<Text style=\{\[styles\.chipText,\s*\{\s*color:\s*([^}]*?)\s*\}\]\}>"
-)
+CHIP_COMPONENT = "ElementChip"
 
 
-def check_element_chips(palette: Palette, report: Report, surfaces: list[tuple[str, RGB]]) -> None:
+def _first(nodes: list[Node], tags: set[str]) -> Node | None:
+    """The first node with one of these tags, depth first."""
+    for node in nodes:
+        if node.tag in tags:
+            return node
+        found = _first(jsx_nodes(node.inner, node.inner_offset, node.inner), tags)
+        if found is not None:
+            return found
+    return None
+
+
+def check_element_chips(
+    palette: Palette, report: Report, surfaces: list[tuple[str, RGB]], all_regions: list[Region]
+) -> None:
     """Every element's label on the surface its own chip paints.
 
     The generic walk already judges the chip where it is written. This asks the
     same question of `ELEMENT_STYLE` directly, so a seventh element is covered
     the day it lands rather than the day someone remembers to render it - and
-    it prints one line per element, which is what makes "which of the six is
-    the bad one" answerable at a glance.
+    it prints one line per element per ground, which is what makes "which of
+    the six is the bad one" answerable at a glance.
 
-    The chip's own formula is read out of `kit.tsx`. If the chip stops being a
-    label written in the element colour on a surface built from it, the audit
-    stops rather than certifying a shape it no longer understands.
+    Both halves of the pair are read out of `ElementChip` itself: the surface
+    off its root `<View>`, the label colour off the `<Text>` inside. Nothing
+    about the chip is restated here, so a chip that stops writing its label in
+    the element's own colour stops this check rather than certifying a shape it
+    no longer describes.
     """
-    source = read(KIT)
-    sheets = stylesheets(source)
-    chip = CHIP.search(source)
-    if not chip:
-        broke(
-            f"`ElementChip` in {rel(KIT)} no longer paints `<View style={{[styles.chip, "
-            "{backgroundColor: …}]}}>` around `<Text style={{[styles.chipText, {color: …}]}}>`; "
-            "teach this check the new shape"
-        )
-    background_expr, colour_expr = chip.group(1), chip.group(2)
+    chip = next((r for r in all_regions if r.name == CHIP_COMPONENT and r.path == KIT), None)
+    if chip is None:
+        broke(f"no `{CHIP_COMPONENT}` component in {rel(KIT)}; the element chip cannot be located")
+    body = chip.source[chip.start : chip.end]
+    sheets = stylesheets(chip.source)
+    nodes = jsx_nodes(body, 0, body)
+    surface_node = _first(nodes, {"View"})
+    label_node = _first(nodes, {"Text"})
+    if surface_node is None or label_node is None:
+        broke(f"`{CHIP_COMPONENT}` in {rel(KIT)} no longer wraps a <Text> in a <View>")
 
-    size_px = font_size(sheets.get("chipText", {}).get("fontSize", "")) or DEFAULT_FONT_PX
-    weight = font_weight(sheets.get("chipText", {}).get("fontWeight", "")) or DEFAULT_WEIGHT
+    surface_props: dict[str, str] = {}
+    for flat in flatten_style(surface_node.attrs, sheets, []):
+        surface_props.update(flat.props)
+    label_props: dict[str, str] = {}
+    for flat in flatten_style(label_node.attrs, sheets, []):
+        label_props.update(flat.props)
+    if "backgroundColor" not in surface_props or "color" not in label_props:
+        broke(
+            f"`{CHIP_COMPONENT}` in {rel(KIT)} no longer declares both a backgroundColor on its "
+            "surface and a color on its label; teach this check the new shape"
+        )
+
+    size_px = font_size(label_props.get("fontSize", "")) or DEFAULT_FONT_PX
+    weight = font_weight(label_props.get("fontWeight", "")) or DEFAULT_WEIGHT
     minimum, rule = rule_for(size_px, weight)
 
     try:
-        tints = resolve_colour_text(background_expr, palette, {})
-        labels = resolve_colour_text(colour_expr, palette, {})
+        tints = resolve_colour_text(surface_props["backgroundColor"], palette, {})
+        labels = resolve_colour_text(label_props["color"], palette, {})
     except Unresolvable as error:
         broke(f"the element chip's colours in {rel(KIT)} cannot be resolved: {error}")
 
@@ -1284,27 +1356,36 @@ def check_element_chips(palette: Palette, report: Report, surfaces: list[tuple[s
         if not tint_for or not label_for:
             report.note(rel(KIT), 1, "element-contrast", f"the {name} chip has no resolvable colour pair")
             continue
-        for surface_name, surface in surfaces:
-            # An opaque chip surface renders identically wherever it is
-            # dropped, so the candidate list collapses to one - which is
-            # precisely the property the web fix bought.
+        # An opaque chip surface renders identically wherever it is dropped, so
+        # the candidate list collapses to one. That collapse *is* the property
+        # the fix buys: a translucent tint takes its lightness from whatever
+        # card it landed on, and the label is written in the very colour doing
+        # the tinting, so the same chip can pass on one screen and fail on the
+        # next.
+        opaque = tint_for[0].a >= 1.0
+        judged = surfaces[:1] if opaque else surfaces
+        worst: tuple[float, RGB, str] | None = None
+        for surface_name, surface in judged:
             painted = composite(tint_for[0], surface)
-            if tint_for[0].a >= 1.0 and surface_name != surfaces[0][0]:
-                continue
             ratio = contrast_ratio(composite(label_for[0], painted), painted)
-            where = "" if tint_for[0].a >= 1.0 else f" on a {surface_name}"
+            where = "" if opaque else f" on {surface_name}"
             report.pairs.append(
                 (f"{rel(KIT)}:chip", f"{name} label on its own chip{where}", ratio, minimum, rule)
             )
-            if ratio + 1e-9 < minimum:
-                report.fail(
-                    rel(KIT),
-                    1,
-                    "element-contrast",
-                    f"the {name} chip label {label_for[0].hex()} on its own surface "
-                    f"{rgb_hex(painted)}{where} is {ratio:.2f}:1, below {minimum:g}:1 for {rule}; "
-                    "an element chip's label is written in the element's own colour",
-                )
+            if worst is None or ratio < worst[0]:
+                worst = (ratio, painted, where)
+        # One finding per element, not one per ground. Every ground is in
+        # `--pairs`; repeating "stone is too pale" eleven times only buries the
+        # element that is fine.
+        if worst is not None and worst[0] + 1e-9 < minimum:
+            report.fail(
+                rel(KIT),
+                1,
+                "element-contrast",
+                f"the {name} chip label {label_for[0].hex()} on its own surface "
+                f"{rgb_hex(worst[1])}{worst[2]} is {worst[0]:.2f}:1, below {minimum:g}:1 for {rule}; "
+                "an element chip's label is written in the element's own colour",
+            )
 
 
 # --------------------------------------------------------------------------
@@ -1352,12 +1433,16 @@ UNCHECKED = [
         "styles gains a word of text, the review line is the warning.",
     ),
     (
-        "which Panel a shared widget was dropped into",
-        "`kit.tsx` cannot see its caller, so every widget there is judged "
-        "against the bare app background, a plain Panel and all six "
-        "element-glowed Panels, and the worst wins. That is stricter than any "
-        "single call site, never laxer - the only direction an audit may err "
-        "in.",
+        "which element a shared widget's caller was talking about",
+        "The ground under a component is derived from its real call sites, so "
+        "`Keypad` is judged where it actually renders. What is not derived is "
+        "whether the caller's element and the widget's element are the *same* "
+        "one: Album glows its detail panel with `detail.element` and puts a "
+        "chip for `detail.element` on it, but those two bindings live in two "
+        "files, so all six glows are tried against all six chips. That is "
+        "stricter than any single call site, never laxer - the only direction "
+        "an audit may err in. Making the chip surface opaque retires the "
+        "question rather than answering it.",
     ),
     (
         "the web client",
@@ -1374,7 +1459,7 @@ UNCHECKED = [
 
 
 def scan_targets() -> list[Path]:
-    out: list[Path] = []
+    out: list[Path] = [APP]
     for root in SCAN_ROOTS:
         if not root.is_dir():
             broke(f"{rel(root)} is missing, so it cannot be scanned")
@@ -1382,41 +1467,141 @@ def scan_targets() -> list[Path]:
             if ".test." in path.name:
                 continue
             out.append(path)
-    return sorted(out)
+    return sorted(set(out))
 
 
-def root_surfaces(palette: Palette) -> list[tuple[str, RGB]]:
-    """Every surface a shared widget can find itself on, worst last.
+# --------------------------------------------------------------------------
+# Which surface is a component actually rendered on
+#
+# The first draft answered this by guessing: a screen sits on the app
+# background, and anything in `src/ui/` might sit on any surface at all, so try
+# all eight and take the worst. Both halves were wrong in the same run.
+#
+# Too lax, on a screen: `SpeedMeter` is declared beside `BattleScreen` but
+# renders inside the opaque `problemCard`, which is lighter than the app
+# background. Its "take your time" label was measured at 3.96:1 when a child
+# actually reads it at 3.55:1.
+#
+# Too strict, in `src/ui/`: `Keypad` is never inside a `Panel` at all, so
+# judging its display against an element-glowed one demanded contrast for a
+# screen that cannot exist - the exact false positive this audit is supposed
+# not to produce.
+#
+# So the surface is *derived*. Every component is walked, every call site
+# records the surface behind the component there, and the walk is repeated
+# until nothing changes. A component nobody renders falls back to the app
+# background, because that is where App.tsx starts.
+# --------------------------------------------------------------------------
 
-    A screen only ever renders on the app background, but `kit.tsx` is dropped
-    onto all of these, and a `Panel` glowed by the lightest element is the
-    lightest ground any label in this app has to survive.
-    """
-    assert palette.panel is not None and palette.glow_alpha is not None
-    base = palette.app_background
-    panel = composite(palette.panel, base)
-    out: list[tuple[str, RGB]] = [("app background", base), ("panel", panel)]
-    for name, colour in sorted(palette.elements.items()):
-        glow = Rgba(colour.r, colour.g, colour.b, palette.glow_alpha)
-        out.append((f"{name}-glowed panel", composite(glow, panel)))
-    return out
+COMPONENT = re.compile(r"^(?:export\s+)?(?:default\s+)?function ([A-Z][\w$]*)\s*\(", re.M)
+
+# A fixed point over the render tree. App -> Router -> a screen -> Panel ->
+# ElementChip is five links, so this is generous; it is capped rather than
+# unbounded so a cycle cannot hang the audit.
+MAX_ROUNDS = 12
 
 
-def root_context(palette: Palette, path: Path) -> Context:
-    if path.parent.name == "ui":
-        backgrounds = [
-            (frozenset({("the surface this widget is dropped on", name)}), surface)
-            for name, surface in root_surfaces(palette)
-        ]
-    else:
-        backgrounds = [(FREE, palette.app_background)]
+@dataclass
+class Region:
+    """One component: where it is declared, and the source that declares it."""
+
+    name: str
+    path: Path
+    source: str
+    start: int
+    end: int
+
+
+def regions(targets: list[Path]) -> list[Region]:
+    out: list[Region] = []
+    for path in targets:
+        source = read(path)
+        marks = [(m.group(1), m.start()) for m in COMPONENT.finditer(source)]
+        bounds = [start for _, start in marks[1:]] + [len(source)]
+        for (name, start), end in zip(marks, bounds):
+            out.append(Region(name, path, source, start, end))
+    return sorted(out, key=lambda r: (str(r.path), r.start))
+
+
+Surfaces = list[tuple[Binding, RGB]]
+
+
+def sort_surfaces(surfaces: Surfaces) -> Surfaces:
+    return sorted(surfaces, key=lambda entry: (sorted(entry[0]), entry[1]))
+
+
+def root_context(component: str, roots: dict[str, Surfaces], palette: Palette) -> Context:
+    surfaces = roots.get(component) or [(FREE, palette.app_background)]
     return Context(
-        backgrounds=tuple(backgrounds),
+        backgrounds=tuple(sort_surfaces(surfaces)[:MAX_VARIANTS]),
         fore=None,
         size_px=DEFAULT_FONT_PX,
         weight=DEFAULT_WEIGHT,
         unresolved=None,
     )
+
+
+def walk(
+    region: Region,
+    palette: Palette,
+    report: Report,
+    roots: dict[str, Surfaces],
+    known: set[str],
+    forwarded: list[tuple[Binding, dict[str, str]]],
+    collect: dict[str, Surfaces] | None,
+) -> None:
+    scope = FileScope(
+        rel=rel(region.path),
+        src=region.source,
+        palette=palette,
+        report=report,
+        sheets=stylesheets(region.source),
+        consts=colour_consts(region.source),
+        forwarded=forwarded,
+        components=known,
+        collect=collect,
+    )
+    context = root_context(region.name, roots, palette)
+    for node in jsx_nodes(region.source[region.start : region.end], region.start, region.source):
+        visit(node, context, scope)
+
+
+def resolve_roots(
+    targets: list[Path],
+    all_regions: list[Region],
+    palette: Palette,
+    forwarded: list[tuple[Binding, dict[str, str]]],
+) -> dict[str, Surfaces]:
+    known = {region.name for region in all_regions}
+    roots: dict[str, Surfaces] = {}
+    for _ in range(MAX_ROUNDS):
+        collected: dict[str, Surfaces] = {}
+        silent = Report()
+        for region in all_regions:
+            walk(region, palette, silent, roots, known, forwarded, collected)
+        settled = {name: sort_surfaces(surfaces)[:MAX_VARIANTS] for name, surfaces in collected.items()}
+        if settled == roots:
+            break
+        roots = settled
+    return roots
+
+
+def chip_surfaces(roots: dict[str, Surfaces], palette: Palette) -> list[tuple[str, RGB]]:
+    """The distinct grounds an `ElementChip` is really rendered on.
+
+    Deduplicated by colour: a dozen call sites that all land on a plain panel
+    are one surface, and printing twelve identical findings would bury the one
+    that differs.
+    """
+    surfaces = roots.get("ElementChip") or [(FREE, palette.app_background)]
+    out: list[tuple[str, RGB]] = []
+    seen: set[RGB] = set()
+    for binding, surface in sort_surfaces(surfaces):
+        if surface in seen:
+            continue
+        seen.add(surface)
+        out.append((", ".join(value for _, value in sorted(binding)) or "the app background", surface))
+    return out
 
 
 def print_unchecked() -> None:
@@ -1457,23 +1642,16 @@ def main() -> int:
     report = Report()
     targets = scan_targets()
     forwarded = forwarded_styles(PANEL_COMPONENT, targets)
+    all_regions = regions(targets)
+    if not all_regions:
+        broke("no components found under mobile/src; the scanner is not seeing the source")
+    roots = resolve_roots(targets, all_regions, palette, forwarded)
+    known = {region.name for region in all_regions}
 
-    for path in targets:
-        source = read(path)
-        scope = FileScope(
-            rel=rel(path),
-            src=source,
-            palette=palette,
-            report=report,
-            sheets=stylesheets(source),
-            consts=colour_consts(source),
-            forwarded=forwarded,
-        )
-        root = root_context(palette, path)
-        for node in jsx_nodes(source, 0, source):
-            visit(node, root, scope)
+    for region in all_regions:
+        walk(region, palette, report, roots, known, forwarded, None)
 
-    check_element_chips(palette, report, root_surfaces(palette))
+    check_element_chips(palette, report, chip_surfaces(roots, palette), all_regions)
 
     report.violations.sort()
     report.review.sort()
@@ -1493,7 +1671,7 @@ def main() -> int:
     print("Mathmon iOS contrast audit")
     print("==========================")
     print(f"palette: {len(palette.named)} theme tokens, {len(palette.elements)} elements")
-    print(f"surfaces: {len(root_surfaces(palette))} (app background, panel, one per element glow)")
+    print(f"components resolved to a surface: {len(roots)} of {len(all_regions)}")
     print(f"files scanned: {len(targets)}")
     print(f"colour pairs resolved: {len(report.pairs)}")
     print(

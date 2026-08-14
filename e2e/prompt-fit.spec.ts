@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { promptWidthEm } from '../src/lib/game/prompt';
 import { STORAGE_KEY } from '../src/lib/storage/client';
 
 /**
@@ -64,6 +65,10 @@ const PROFILE = {
 const VIEWPORTS = [
   { name: 'Pixel 7 (412px)', width: 412, height: 915 },
   { name: 'iPhone SE (320px)', width: 320, height: 568 },
+  // Above Tailwind's `lg` the battle splits into two columns and the prompt
+  // gets a *narrower* box than the shell, at the largest type size in the
+  // scale. It is the one case where a wider screen is the harder one.
+  { name: 'a laptop (1280px, two columns)', width: 1280, height: 800 },
 ];
 
 /** Reads how the prompt actually painted, from the browser's own line boxes. */
@@ -77,13 +82,19 @@ async function measurePrompt(page: import('@playwright/test').Page) {
     const lines = range.getClientRects().length;
 
     const text = range.getBoundingClientRect();
-    const box = element.getBoundingClientRect();
+    // The line box is the *card's* content width, not the element's own. The
+    // card centres its children, so the prompt is shrink-to-fit and its own
+    // rect is the width of the text - which would make "does the text fit in
+    // the box" trivially true and prove nothing. `clientWidth` excludes the
+    // card's borders, which is exactly the room the text has.
+    const card = element.parentElement;
+    if (card === null) throw new Error('the prompt has no card around it');
     const style = getComputedStyle(element);
 
     return {
       lines,
       textWidth: text.width,
-      boxWidth: box.width,
+      boxWidth: card.clientWidth,
       fontSize: parseFloat(style.fontSize),
       documentScrollWidth: document.documentElement.scrollWidth,
       viewportWidth: window.innerWidth,
@@ -133,12 +144,32 @@ test.describe('the maths prompt fits on one line', () => {
       // widens the document is not clipped, it is simply off screen.
       expect(measured.documentScrollWidth).toBeLessThanOrEqual(measured.viewportWidth);
 
-      // Shrinking to fit is worthless if the result is too small to read. The
-      // floor lives in the shared rule; this is the value it must not go below.
+      /**
+       * The size the client chose must be no larger than the line box it really
+       * got can afford, under the same width model the audit script uses.
+       *
+       * This is the assertion that keeps `PROMPT_TYPE`'s layout numbers honest.
+       * The component works its line box out from declared constants - the
+       * shell's `max-w-5xl`, `<main>`'s `px-4`, the card's borders, the `lg`
+       * two-column split - and every one of those restates something the markup
+       * says elsewhere. If a padding changes and the constants do not, the size
+       * comes out too big for the real box and this fires, rather than a child
+       * finding out.
+       */
+      const affordable = measured.boxWidth / promptWidthEm(LONGEST_PROMPT);
+      expect(
+        measured.fontSize,
+        `sized to ${measured.fontSize}px, but a ${measured.boxWidth.toFixed(1)}px box ` +
+          `affords only ${affordable.toFixed(1)}px - the layout numbers declared in ` +
+          'PROMPT_TYPE have drifted from the real layout',
+      ).toBeLessThanOrEqual(affordable + 0.01);
+
+      // Shrinking to fit is worthless if the result is too small to read.
+      // `LEGIBLE_MIN` in scripts/audit_prompt_fit.py is the same bar.
       expect(
         measured.fontSize,
         `shrunk to ${measured.fontSize}px, which is too small for a seven-year-old`,
-      ).toBeGreaterThanOrEqual(20);
+      ).toBeGreaterThanOrEqual(18);
     });
   }
 });

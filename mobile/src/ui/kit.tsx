@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Pressable, type StyleProp, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { ELEMENT_STYLE, type Element, type Language, t } from '../engine';
-import { TAP, colors, radius, space, tint } from '../theme';
+import { TAP, colors, mix, radius, space, tint } from '../theme';
 
 /**
  * The shared widgets.
@@ -66,7 +66,26 @@ export function Button({
 export function ElementChip({ element, label }: { element: Element; label: string }) {
   const style = ELEMENT_STYLE[element];
   return (
-    <View style={[styles.chip, { backgroundColor: tint(style.color, 0.22) }]}>
+    <View
+      style={[
+        styles.chip,
+        {
+          // Opaque, and mixed towards the app's own background rather than
+          // left translucent. The label is written in the very colour doing
+          // the tinting, so a translucent surface made the chip's contrast
+          // depend on the card it was dropped onto: Stone read 4.39:1 on the
+          // app background and 2.95:1 on the album's frost-glowed detail
+          // panel. Flat means the chip reads the same everywhere, and
+          // `audit_contrast_ios.py` reads this percentage out of this line to
+          // prove all six elements clear 4.5:1. The web client's ElementChip
+          // is the same fix spelled `color-mix`.
+          backgroundColor: mix(style.color, 0.12, colors.bg),
+          // With the surface no longer a wash of the element colour, the edge
+          // is what still says "chip" rather than "sentence".
+          borderColor: tint(style.color, 0.4),
+        },
+      ]}
+    >
       <Text style={[styles.chipText, { color: style.color }]}>
         {style.icon} {label}
       </Text>
@@ -174,6 +193,7 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.35 },
   chip: {
     borderRadius: radius.pill,
+    borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 4,
     alignSelf: 'flex-start',

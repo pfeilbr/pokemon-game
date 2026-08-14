@@ -114,6 +114,8 @@ src/lib/game/       The engine. Pure. No React, no I/O, no Date.now, no Math.ran
   art.ts            Creature geometry as data. Pure; no SVG, no DOM.
   moves.ts          The four-slot move kit.
   math.ts           Problem generation + adaptive difficulty.
+  prompt.ts         How wide a prompt is, and how large it may be drawn.
+                    Pure; no CSS, no points, no DOM.
   battle.ts         The battle state machine (a reducer).
   progress.ts       XP, levels, evolution, badges, streaks, save repair.
 
@@ -138,6 +140,15 @@ or browser dependency that would break under Hermes.
 
 So: a rule change belongs in `src/lib/game/` and lands on both clients at once.
 Never fork a rule into a client.
+
+The prompt's _size_ is shared the same way, and for the same reason. The chess
+strand made the longest question `(♛9 + ♜5) − (♝3 + ♟1)` — 21 characters, four
+of them glyphs nearly twice the advance of a digit — and it wrapped onto two
+lines on every phone. `prompt.ts` answers "how many ems wide is this string" and
+"what size fits a line box of N units"; each client supplies only what it alone
+knows, its normal size and its own line box. The harder case turned out to be a
+laptop, not a phone: above `lg` the battle splits into two columns, so a wide
+screen gives the prompt a _narrower_ box while using the largest type.
 
 The creature art is shared the same way the rules are. `art.ts` emits a
 `Drawing` — primitive shapes and gradients, no SVG and no DOM — and each client

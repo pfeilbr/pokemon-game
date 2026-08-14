@@ -1524,10 +1524,14 @@ UNCHECKED = [
     ),
     (
         "the iOS client",
-        "`mobile/` has its own palette in `mobile/src/theme.ts` and its own "
-        "renderer. Auditing it belongs here one day, but the root CI job does "
-        "not install `mobile/node_modules`, and nothing at the root should "
-        "grow a reason to reach across that boundary.",
+        "checked from the other side, by `mobile/scripts/audit_contrast_ios.py` "
+        "in the iOS job - not from here, because the root CI job does not "
+        "install `mobile/node_modules` and nothing at the root should grow a "
+        "reason to reach across that boundary. It imports this module's colour "
+        "arithmetic and thresholds rather than restating them, so the two "
+        "clients cannot be graded by two different formulas. It found the same "
+        "failures live on iOS: the submit key at 2.54:1, and `colors.faint` "
+        "being slate-500 across ten call sites.",
     ),
 ]
 

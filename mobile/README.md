@@ -198,10 +198,63 @@ reuse them afterwards.
 
 ## Status
 
-![The iOS app on a simulator](docs/screens/01-sign-up.png)
+![Sign-up on the iOS simulator](docs/screens/01-sign-up.png)
 
-That screenshot is not a mockup. It was captured by the `simulator` job on a
-GitHub macOS runner, from a Release build with the JavaScript bundle embedded.
+That screenshot is not a mockup. It was captured on a GitHub macOS runner from
+a Release build with the JavaScript bundle embedded, and Vision OCR read the
+words back off it before it was accepted.
+
+### The visual record
+
+`mobile/docs/screens/` is this client's answer to the web app's
+`docs/screenshots/`, and it is captured the same way: by driving the real app,
+never by hand.
+
+`mobile/scripts/capture_screens.sh` takes a booted simulator and a built
+`.app`, walks the app through its screens, photographs each one and asserts the
+screen's own words are in the pixels before accepting the capture. It seeds a
+save straight into the app's AsyncStorage container - the same profile the web
+screenshots use - and then selects each screen with a deep link
+(`mathmon://screen/album`), because `simctl` can open a URL and cannot tap. That
+link is the one hook this puts in shipping code, and it can do nothing a button
+cannot: it selects a screen, and deliberately cannot carry state. A deep link
+that could overwrite a child's album would be a real hole, and it would live in
+the app forever to save a harness twenty lines - which is why the save is seeded
+through the filesystem instead.
+
+| Capture                | Screen                                                      |
+| ---------------------- | ----------------------------------------------------------- |
+| `01-sign-up`           | Trainer name, on a device with no save at all               |
+| `02-dashboard`         | Partner in its evolved form, XP bar, maths level, streak    |
+| `03-choose-opponent`   | Three opponents with the net matchup verdict                |
+| `04-battle`            | The fight, mid-turn, with the move kit and the charge meter |
+| `05-album`             | All 36 creatures by element, un-caught ones as silhouettes  |
+| `06-progress`          | Badges, and per-skill accuracy and average time             |
+| `07-settings`          | Language, sound, account, start over                        |
+| `08-sign-in`           | Trainer name and PIN                                        |
+| `09-chinese-dashboard` | The dashboard in 中文                                       |
+| `10-chinese-album`     | The album in 中文                                           |
+
+The last two are seeded from a profile identical to the English one except for
+`settings.language`. That is deliberate: if the translation ever stopped
+applying, those files would be byte-identical to `02` and `05`, and the audit
+below fails on exactly that. It is the bug the web client actually shipped -
+`12-chinese.png` was a copy of an English dashboard for weeks, with a green
+test suite over it.
+
+Only `01-sign-up.png` is committed today. The other nine need a macOS runner:
+run the **Capture the app's screens** job, download the `ios-screens` artifact
+and commit it. `mobile/scripts/audit_ios_screenshots.py` names every screen that
+is still missing on every run, so an incomplete record says so out loud rather
+than being something you have to notice.
+
+That audit is the cheap half, and it runs on every push with no simulator, no
+Xcode and no build. It decodes each committed PNG with `zlib` and `struct` and
+checks the set is decodable, phone-sized and all one device, not blank, not two
+names for one picture, and painted on this app's own background. The last one is
+the redbox check: a redbox is a running app on a red screen, the springboard is
+a running device with the wrong app on it, and both photograph beautifully.
+Neither paints `#0b1120` over most of the display.
 
 The game is complete and playable on the device:
 

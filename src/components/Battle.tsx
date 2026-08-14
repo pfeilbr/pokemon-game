@@ -80,6 +80,18 @@ export const PROMPT_TYPE = {
   min: 18,
   /** The narrowest phone this layout is built for - an iPhone SE in portrait. */
   narrowest: 320,
+  /**
+   * `promptLineBox(narrowest)`, written out because
+   * `scripts/audit_prompt_fit.py` reads this file as text and cannot run the
+   * function. The two-column case at `columnsFrom` is roomier (626), so this
+   * really is the floor.
+   *
+   * Everything below this line restates something the markup says elsewhere,
+   * which is why `e2e/prompt-fit.spec.ts` measures the card's real content box
+   * at 320, 412 and 1280 and fails if the size these produce is bigger than
+   * that box can hold.
+   */
+  narrowLineBox: 286,
   /** `AppShell`'s `max-w-5xl`. */
   shellMax: 1024,
   /** `<main>`'s `px-4` (2 x 16) plus the prompt card's two 1px borders. */
@@ -304,9 +316,7 @@ export function Battle({ playerCreatureId, opponentId, onExit, onRematch }: Prop
               style={{
                 fontSize: `${promptFontSize(state.problem.prompt, {
                   full:
-                    viewportWidth >= PROMPT_TYPE.wideFrom
-                      ? PROMPT_TYPE.fullWide
-                      : PROMPT_TYPE.full,
+                    viewportWidth >= PROMPT_TYPE.wideFrom ? PROMPT_TYPE.fullWide : PROMPT_TYPE.full,
                   min: PROMPT_TYPE.min,
                   lineBox: promptLineBox(viewportWidth),
                 }).toFixed(2)}px`,

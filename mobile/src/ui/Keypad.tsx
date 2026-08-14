@@ -105,7 +105,13 @@ const styles = StyleSheet.create({
     color: colors.gold,
     fontVariant: ['tabular-nums'],
   },
-  displayEmpty: { color: '#334155' },
+  // The "?" standing in for an answer not yet typed. It was `#334155`, which
+  // is 1.91:1 on the display's own near-black - the same failure, to within
+  // three hundredths, that `scripts/audit_contrast.py` found in the web
+  // client's PIN placeholder at 1.86:1. A placeholder is text a child reads to
+  // know what the box is for, so it takes the quiet-label colour rather than a
+  // shade of the background.
+  displayEmpty: { color: colors.faint },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   key: {
     // Three per row, accounting for the two gaps between them.
@@ -131,5 +137,11 @@ const styles = StyleSheet.create({
   },
   submitPressed: { backgroundColor: '#059669' },
   submitDisabled: { opacity: 0.4 },
-  submitText: { fontSize: 26, fontWeight: '900', color: colors.text },
+  // Dark ink on the green, not white. White on this emerald is 2.54:1 - below
+  // even the 3:1 that large text owes - which is the same pair the web client
+  // was shipping at 1.94:1 before `scripts/audit_contrast.py` measured it, and
+  // it was on the single most important control in the game. The web fix went
+  // dark on the green too (`text-slate-900`); this is the emerald-hued
+  // equivalent of the dark ink the gold buttons already use.
+  submitText: { fontSize: 26, fontWeight: '900', color: '#04241b' },
 });
