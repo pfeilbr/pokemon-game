@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { GameProvider } from '@/components/GameProvider';
+import { ServiceWorkerRegistrar } from '@/components/ServiceWorkerRegistrar';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="min-h-[100dvh] bg-slate-950 text-slate-100 antialiased">
         <GameProvider>{children}</GameProvider>
+        <ServiceWorkerRegistrar />
       </body>
     </html>
   );
