@@ -63,6 +63,16 @@ run or `npm run preflight -- --restore`. A crash that left your
 
 `npm run audits` runs the audit scripts alone, without the parking.
 
+**Regenerate screenshots against their own port**, e.g. `PORT=3177 npm run
+screenshots`. `playwright.config.ts` sets `reuseExistingServer: !process.env.CI`,
+so a screenshot run will silently attach to any dev server already listening and
+photograph whatever that server is serving — which is how seven blank captures
+were produced, four of them from tests that reported PASS. `shot()` now refuses
+to photograph a page with almost no visible text, and `scripts/audit_screenshots.py`
+catches what gets past it: it found `12-chinese.png` byte-identical to
+`02-dashboard.png`, meaning the README's only picture of the Chinese interface
+had always been an English dashboard.
+
 ### iOS
 
 ```bash

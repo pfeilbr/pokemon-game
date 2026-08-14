@@ -241,10 +241,18 @@ test.describe('accounts', () => {
     await page.getByTestId('toggle-sound').click();
     await page.waitForTimeout(2500);
 
-    // The server takes that push at face value - `PUT /api/profile` stores what
-    // it is given. So at this moment the server really has lost the laptop's
-    // creature, and only the laptop still has it.
-    expect((await readProfile(page)).caught).not.toContain('pebblo');
+    // This assertion used to read `not.toContain('pebblo')`, because the server
+    // took that push at face value: `PUT /api/profile` stored what it was
+    // given, so for as long as the laptop stayed shut the server really had
+    // lost its creature. The laptop repaired it on reopening, which is what the
+    // rest of this test walks through - but a laptop that never reopens would
+    // have left the loss standing.
+    //
+    // `saveProfileMerged` closes that window: the write is merged against the
+    // stored row, so the creature is never gone even transiently, and the
+    // tablet sees it on its very next read. The window mattered because it was
+    // the one state from which no device could recover on its own.
+    expect((await readProfile(page)).caught).toContain('pebblo');
 
     // Opening the laptop again is where the two saves meet. Nothing either
     // device earned may be gone afterwards.

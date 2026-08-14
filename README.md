@@ -55,6 +55,8 @@ Everything is in **English and Chinese**, including all 36 creature names.
 Pick a name, pick a partner. No account, no setup — you are playing in about
 fifteen seconds.
 
+![Naming your trainer](docs/screenshots/17-start-name.png)
+
 ![Choosing a starter](docs/screenshots/01-choose-partner.png)
 
 ### Home
@@ -96,12 +98,19 @@ a dice roll. XP, level-ups, evolutions and new badges are all called out by name
 
 ![Victory](docs/screenshots/08-victory.png)
 
+Losing is not a dead end — a lost battle still awards XP, because a
+seven-year-old who gets nothing for trying stops trying.
+
+![Defeat still earns XP](docs/screenshots/19-defeat.png)
+
 ### Album
 
 All 36 creatures across twelve evolution lines, two per element. Un-caught
 ones stay silhouetted.
 
 ![Album](docs/screenshots/09-album.png)
+
+![A creature's card](docs/screenshots/18-album-detail.png)
 
 ### Progress
 
@@ -114,6 +123,13 @@ Badges, and a per-skill breakdown of accuracy, average time and attempt count.
 The whole interface, including every creature name.
 
 ![Chinese interface](docs/screenshots/12-chinese.png)
+
+Chinese is not a translated veneer over an English game — every screen is
+first-class in both languages, including a battle mid-question and the album.
+
+![Battling in Chinese](docs/screenshots/20-chinese-battle.png)
+
+![The album in Chinese](docs/screenshots/21-chinese-album.png)
 
 ### On a phone
 

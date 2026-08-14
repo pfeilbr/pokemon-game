@@ -851,13 +851,21 @@ def main(argv: list[str]) -> int:
     emit(f"  workflow    {WORKFLOW}  (job: {JOB_ID})")
 
     # A killed earlier run is repaired before anything else touches the tree.
-    emit("")
-    emit("PARKING RECOVERY")
-    recovery = recover_breadcrumb(emit)
-    if recovery != 0:
-        return 2
-    if opts.restore:
-        return 0
+    #
+    # Skipped for --plan, which parks nothing, runs nothing and only prints. It
+    # used to run this too, and that made the tool fail on itself: `--plan` is a
+    # CI step, so a real preflight run would execute it as step 2 while its own
+    # parking was live, and the nested call would refuse with "another preflight
+    # is running" - a conflict guard correctly firing on a conflict that was not
+    # one. Found by running the preflight on this repository.
+    if not opts.plan:
+        emit("")
+        emit("PARKING RECOVERY")
+        recovery = recover_breadcrumb(emit)
+        if recovery != 0:
+            return 2
+        if opts.restore:
+            return 0
 
     # -- read the plan out of ci.yml -------------------------------------
     workflow_path = os.path.join(REPO_ROOT, WORKFLOW)

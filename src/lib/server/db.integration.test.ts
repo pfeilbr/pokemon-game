@@ -435,4 +435,105 @@ suite('account persistence against Postgres', () => {
       expect(google.ok).toBe(true);
     });
   });
+  /**
+   * The server half of "a merge never costs a child what he earned".
+   *
+   * `scripts/audit_sync.py` proves the *client* merge is lossless, but the
+   * client only merges what it reads on open. A tab left signed in since before
+   * he played on the tablet holds a save that never saw those creatures, and a
+   * plain `saveProfile` writes it straight over the row. The next device to
+   * open repairs it - that is what the two-device E2E walks through - but a tab
+   * that never reopens leaves the loss standing.
+   *
+   * These live in this file rather than their own because this file owns the
+   * `delete from trainers` in `beforeEach`. Vitest parallelises across files, so
+   * a separate file that created a trainer once and reused it across tests had
+   * the row deleted underneath it mid-run - green on a direct `npm test` and red
+   * under the preflight, purely on timing. Sharing the lifecycle removes the
+   * race rather than narrowing it.
+   */
+  describe('a stale client cannot wipe the stored album', () => {
+    /** What the child actually earned, on the device he was playing on. */
+    const earned = () => ({
+      ...progress.createProfile({
+        trainerName: 'Player',
+        starterId: 'cindik',
+        now: '2026-08-14T10:00:00.000Z',
+      }),
+      caught: ['cindik', 'sproutle', 'bublet', 'pebblo', 'voltick'],
+      badges: ['first-win', 'combo-5', 'collector-6'],
+      xp: 491,
+      battlesWon: 9,
+      bestCombo: 7,
+      updatedAt: '2026-08-14T10:00:00.000Z',
+    });
+
+    /**
+     * The stale tab. Note the LATER timestamp with LESS progress - not a
+     * contrived case, but exactly what toggling the language on the laptop
+     * does: it bumps updatedAt without earning anything.
+     */
+    const stale = () => ({
+      ...progress.createProfile({
+        trainerName: 'Player',
+        starterId: 'cindik',
+        now: '2026-08-14T09:00:00.000Z',
+      }),
+      caught: ['cindik'],
+      xp: 10,
+      updatedAt: '2026-08-14T11:00:00.000Z',
+    });
+
+    const newTrainer = async (name: string): Promise<string> => {
+      const created = await accounts.registerWithPin(name, '1234');
+      expect(created.ok, 'could not create a trainer to test with').toBe(true);
+      return created.ok ? created.trainerId : '';
+    };
+
+    it('keeps every creature and badge when a stale save arrives later', async () => {
+      const id = await newTrainer('MergeOne');
+      await accounts.saveProfile(id, earned());
+
+      await accounts.saveProfileMerged(id, stale());
+
+      const stored = progress.normaliseProfile(await accounts.loadProfile(id));
+      expect(stored).not.toBeNull();
+      // The whole point: the newer-but-emptier write must not be a discard.
+      expect(stored?.caught).toEqual(
+        expect.arrayContaining(['cindik', 'sproutle', 'bublet', 'pebblo', 'voltick']),
+      );
+      expect(stored?.badges).toEqual(
+        expect.arrayContaining(['first-win', 'combo-5', 'collector-6']),
+      );
+      expect(stored?.xp).toBe(491);
+      expect(stored?.battlesWon).toBe(9);
+      expect(stored?.bestCombo).toBe(7);
+    });
+
+    it('still accepts genuinely newer progress', async () => {
+      const id = await newTrainer('MergeTwo');
+      await accounts.saveProfile(id, earned());
+
+      await accounts.saveProfileMerged(id, {
+        ...earned(),
+        caught: [...earned().caught, 'chillcoil'],
+        xp: 600,
+        updatedAt: '2026-08-14T12:00:00.000Z',
+      });
+
+      const stored = progress.normaliseProfile(await accounts.loadProfile(id));
+      expect(stored?.caught).toContain('chillcoil');
+      expect(stored?.xp).toBe(600);
+    });
+
+    it('stores the incoming save when the trainer has nothing yet', async () => {
+      const id = await newTrainer('MergeThree');
+
+      await accounts.saveProfileMerged(id, earned());
+
+      const stored = progress.normaliseProfile(await accounts.loadProfile(id));
+      expect(stored?.caught).toHaveLength(5);
+      expect(stored?.xp).toBe(491);
+    });
+  });
 });
