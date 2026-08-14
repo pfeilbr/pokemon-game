@@ -81,13 +81,19 @@ jobs:
       # Pages ends up loading no CSS at all.
       - run: touch out/.nojekyll
 
-      - uses: actions/configure-pages@v5
-        # Creates the Pages site on first run rather than requiring someone to
-        # flip a switch in Settings first. The workflow already holds
-        # `pages: write`, so it can do this itself; without it the very first
-        # run fails with "Get Pages site failed" and the site never appears.
-        with:
-          enablement: true
+      # Deliberately no `configure-pages` step here.
+      #
+      # Its only job would be to hand back a base path, which this workflow
+      # already works out from the repository name - and it fails outright until
+      # Pages has been enabled, which marked a perfectly good export as a failed
+      # build. Worse, it cannot fix that itself: `enablement: true` asks the
+      # API to create the site and GITHUB_TOKEN is refused with "Resource not
+      # accessible by integration", because creating a Pages site is an admin
+      # action and the workflow token deploys to one, it does not conjure one.
+      #
+      # So the build always runs to completion and uploads the artifact. Only
+      # `deploy` needs Pages to exist, which makes the red mark land on the step
+      # that actually needs a human and leaves the site built and waiting.
       - uses: actions/upload-pages-artifact@v3
         with:
           path: out
@@ -101,5 +107,8 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # Fails until Pages is switched on once, in
+      # Settings -> Pages -> Build and deployment -> Source: GitHub Actions.
+      # After that this needs nothing from anybody, on this or any later push.
       - id: deployment
         uses: actions/deploy-pages@v4

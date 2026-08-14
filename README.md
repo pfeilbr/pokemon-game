@@ -143,9 +143,18 @@ child to a second device.
 ### GitHub Pages — no account, no configuration
 
 `.github/workflows/pages.yml` builds a static export on every push to `main`
-and publishes it. To switch it on: **Settings → Pages → Build and deployment →
-Source: GitHub Actions**. That is the only step; the workflow does the rest,
-and the URL appears in the run's summary.
+and publishes it. It needs Pages switched on once:
+
+> **Settings → Pages → Build and deployment → Source: GitHub Actions**
+
+That single step genuinely cannot be automated. `GITHUB_TOKEN` can deploy to a
+Pages site but not create one — `enablement: true` on `configure-pages` is
+refused with _"Resource not accessible by integration"_, because creating the
+site is an admin action. Tried, and it does not work.
+
+Until then the build still runs to completion and uploads the site as an
+artifact; only the deploy step waits. Afterwards nothing is needed again, on
+this or any later push, and the URL appears in the run's summary.
 
 The app is honest about what that deployment can do: with no API behind it,
 `accountsAvailable()` is false, so the sign-in UI says accounts are off rather
