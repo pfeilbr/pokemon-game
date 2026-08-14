@@ -128,6 +128,30 @@ Optional, and only offered when the deployment has a database attached.
 
 ---
 
+## Two ways to put this online
+
+|                  | What you get                                       | What it costs you                         |
+| ---------------- | -------------------------------------------------- | ----------------------------------------- |
+| **GitHub Pages** | The whole game, saving in the browser              | One toggle in this repo's settings        |
+| **Vercel**       | The same game, plus accounts and cross-device sync | An import, still no environment variables |
+
+Neither is a cut-down version. The engine is pure and the profile lives in
+`localStorage`, so all 36 creatures, every battle and the whole album work
+identically either way. The only difference is whether a save can follow a
+child to a second device.
+
+### GitHub Pages — no account, no configuration
+
+`.github/workflows/pages.yml` builds a static export on every push to `main`
+and publishes it. To switch it on: **Settings → Pages → Build and deployment →
+Source: GitHub Actions**. That is the only step; the workflow does the rest,
+and the URL appears in the run's summary.
+
+The app is honest about what that deployment can do: with no API behind it,
+`accountsAvailable()` is false, so the sign-in UI says accounts are off rather
+than offering a form that cannot work. Verified rather than assumed — the E2E
+suite plays a full battle against the exported files, including that message.
+
 ## Deploying to Vercel
 
 The app runs with **no environment variables at all**, so this is genuinely a

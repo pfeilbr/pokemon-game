@@ -1,0 +1,99 @@
+name: Pages
+
+# A playable build with no account, no database and no credentials at all.
+#
+# The full deployment is Vercel: API routes, accounts, cross-device sync. This
+# is the other supported shape - the same game, the same 36 creatures, the same
+# engine, saving to the browser instead of to a server. It exists because it
+# needs nothing from anybody: no import wizard, no environment variables, no
+# billing relationship. `accountsAvailable()` already gates the account UI, so
+# the app tells the truth here rather than offering a sign-in that cannot work.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time; never cancel one midway or the site is left half-written.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    name: Build the static export
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Work out the base path
+        id: base
+        # A project site is served from /<repo>, so assets need that prefix. A
+        # user or org site (<login>.github.io) is served from the root and must
+        # not have one - hardcoding either way breaks the other.
+        run: |
+          set -euo pipefail
+          repo="${GITHUB_REPOSITORY#*/}"
+          if [ "$repo" = "${GITHUB_REPOSITORY_OWNER}.github.io" ]; then
+            echo "path=" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=/$repo" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build without the API routes
+        # `output: 'export'` refuses to build a route handler, and rightly so -
+        # a route handler is a server. Moving them aside is the honest way to
+        # say "this deployment has no backend" rather than shipping endpoints
+        # that would 404 at runtime.
+        env:
+          STATIC_EXPORT: '1'
+          PAGES_BASE_PATH: ${{ steps.base.outputs.path }}
+        run: |
+          set -euo pipefail
+          mv src/app/api /tmp/api-routes
+          npm run build
+          mv /tmp/api-routes src/app/api
+
+      - name: Check the export is actually a site
+        # A green build that produced an empty directory would publish a blank
+        # page, and nobody would find out until a child opened it.
+        run: |
+          set -euo pipefail
+          test -f out/index.html
+          test -d out/album
+          grep -q "Mathmon" out/index.html
+          echo "exported $(find out -type f | wc -l) files"
+
+      # Jekyll would otherwise eat the _next directory, whose name starts with
+      # an underscore. This is the single most common way a Next.js site on
+      # Pages ends up loading no CSS at all.
+      - run: touch out/.nojekyll
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

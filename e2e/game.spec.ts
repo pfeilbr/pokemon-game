@@ -223,10 +223,19 @@ test.describe('deployment without a database', () => {
   // Only meaningful against a server that genuinely has no database - which is
   // the zero-config Vercel import. CI runs the suite in both shapes.
   test.beforeEach(async ({ page }) => {
-    const session = (await (await page.request.get('/api/session')).json()) as {
-      accountsAvailable: boolean;
-    };
-    test.skip(session.accountsAvailable, 'this deployment has a database attached');
+    // Three shapes have to be told apart here, not two. With a database the
+    // endpoint answers `true`; without one it answers `false`; and on a purely
+    // static host there is no endpoint at all and this returns the 404 page,
+    // which is HTML. Parsing that as JSON threw, so this block failed on the
+    // one deployment it most needed to cover. No API means no accounts, which
+    // is exactly the conclusion the client itself draws.
+    const accountsAvailable = await page.request
+      .get('/api/session')
+      .then((response) => response.json() as Promise<{ accountsAvailable: boolean }>)
+      .then((body) => body.accountsAvailable === true)
+      .catch(() => false);
+
+    test.skip(accountsAvailable, 'this deployment has a database attached');
   });
 
   test('the login page explains that accounts are off rather than erroring', async ({ page }) => {
