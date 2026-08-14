@@ -702,8 +702,10 @@ def recover_breadcrumb(emit) -> int:
         emit("    Refusing to choose between them. Delete whichever is wrong.")
         return 2
     if here and not there:
-        # Killed between writing the breadcrumb and moving: nothing moved.
-        emit("  the tree was already intact (killed before the move); note cleared")
+        # Either the kill landed before the move, or the parked copy has since
+        # been dealt with by hand. Both leave the tree correct, which is the
+        # only thing this function is responsible for.
+        emit("  mobile/node_modules is in place and nothing is parked; stale note cleared")
         Parking._forget()
         return 0
     if not there:
@@ -876,7 +878,8 @@ def main(argv: list[str]) -> int:
     # Forwarded tool output is the one thing here that cannot be deterministic;
     # stripping colour at least makes it diffable.
     base_env["NO_COLOR"] = "1"
-    adaptations: list[str] = ["NO_COLOR=1 (so a forwarded failure is diffable, not ANSI soup)"]
+    base_env["FORCE_COLOR"] = "0"  # some sandboxes set it, and it overrides NO_COLOR
+    adaptations: list[str] = ["NO_COLOR=1, FORCE_COLOR=0 (a forwarded failure diffs, instead of being ANSI soup)"]
     if opts.ci_env:
         base_env["CI"] = "true"
         adaptations.append("CI=true (matches the runner: playwright forbids .only and retries once)")
