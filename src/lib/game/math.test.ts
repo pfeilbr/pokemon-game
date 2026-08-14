@@ -3,6 +3,7 @@ import {
   ADAPT_WINDOW,
   MAX_TIER,
   MIN_TIER,
+  PATIENCE_WINDOW,
   SKILLS,
   SKILL_META,
   type Attempt,
@@ -186,9 +187,27 @@ describe('nextTier', () => {
     expect(nextTier(5, window)).toBe(6);
   });
 
-  it('does not promote when accurate but slow', () => {
+  it('does not promote on one window when accurate but slow', () => {
     const slow = parTimeForTier(5) * 1000 + 5000;
     const window = Array.from({ length: ADAPT_WINDOW }, () => attempt(true, slow));
+    expect(nextTier(5, window)).toBe(5);
+  });
+
+  it('promotes an accurate but slow player once the patient window fills', () => {
+    // The whole point of the second window. Speed buys a promotion in eight
+    // questions; getting them right buys the same promotion in sixteen. Being
+    // slow on the keypad delays the climb, it does not cap it.
+    const slow = parTimeForTier(5) * 1000 + 5000;
+    const window = Array.from({ length: PATIENCE_WINDOW }, () => attempt(true, slow));
+    expect(nextTier(5, window)).toBe(6);
+  });
+
+  it('does not let the patient window rescue a player who is not accurate', () => {
+    // 14/16 = 0.875: over the promote threshold on any eight of them, under the
+    // near-perfect bar the patient path asks for. Patience is for a child who
+    // has the maths and is slow on the keypad, not one who is still guessing.
+    const slow = parTimeForTier(5) * 1000 + 5000;
+    const window = Array.from({ length: PATIENCE_WINDOW }, (_, i) => attempt(i % 8 !== 0, slow));
     expect(nextTier(5, window)).toBe(5);
   });
 
@@ -351,7 +370,7 @@ describe('the ramp over a whole play session', () => {
 
     for (let i = 0; i < questions; i++) {
       tierSum += tier;
-      window = [...window, answer(tier, isCorrect(i), speedFactor)].slice(-ADAPT_WINDOW);
+      window = [...window, answer(tier, isCorrect(i), speedFactor)].slice(-PATIENCE_WINDOW);
       const next = nextTier(tier, window);
       expect(
         Math.abs(next - tier),
@@ -378,8 +397,31 @@ describe('the ramp over a whole play session', () => {
     expect(run.questionsToTop).toBeGreaterThanOrEqual((MAX_TIER - MIN_TIER) * ADAPT_WINDOW);
   });
 
-  it('never promotes a perfect player who is answering slower than par', () => {
-    const run = play(400, () => true, 1.5);
+  /**
+   * This pair replaces a test that asserted a slow perfect player never leaves
+   * tier 1 at all. That test passed, and it was wrong: 400 correct answers in a
+   * row, still on "adding to 20", because a seven-year-old hunting for digits on
+   * an on-screen keypad reads as "not fluent" to a clock. CLAUDE.md has always
+   * said slowness is not punished; a permanent difficulty cap is the harshest
+   * punishment in the game. Speed still buys the faster climb - that is the
+   * claim these two now make together.
+   */
+  it('lets a slow but accurate player reach the top eventually', () => {
+    const run = play(900, () => true, 1.5);
+    expect(run.tier).toBe(MAX_TIER);
+  });
+
+  it('still climbs faster for a fast player than a slow one', () => {
+    const fast = play(900, () => true, 0.25);
+    const slow = play(900, () => true, 1.5);
+    expect(fast.questionsToTop).not.toBeNull();
+    expect(slow.questionsToTop).toBeGreaterThan(fast.questionsToTop!);
+  });
+
+  it('never promotes a slow player who is merely good rather than accurate', () => {
+    // 7/8 correct: enough to promote if he were quick, never enough to be
+    // carried by patience alone.
+    const run = play(400, (i) => i % 8 !== 0, 1.5);
     expect(run.highest).toBe(MIN_TIER);
   });
 

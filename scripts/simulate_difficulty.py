@@ -6,18 +6,32 @@ Why this exists
 `CLAUDE.md` makes a load-bearing promise about the maths ramp:
 
     "Difficulty adapts on a rolling 8-attempt window and moves one tier at a
-    time. Promotion needs both accuracy AND comfort within par, so a lucky
-    streak of easy questions cannot fling a child into fractions."
+    time. Promotion needs accuracy, and answering within par earns it in eight
+    questions instead of sixteen, so a lucky streak of easy questions cannot
+    fling a child into fractions and a slow one is never capped."
 
-That sentence was *false* when it was first written: the rolling window was
-carried across a promotion, so every promotion's evidence was already stale and
-a perfect player vaulted from adding-to-20 to two-step expressions in sixteen
-questions. It was fixed in `progress.ts` (the window is cleared on a tier
-change) and guarded by a handful of hand-written unit tests. A handful of cases
-is thin protection for the one property most likely to decide whether a
-seven-year-old keeps playing, so this script sweeps the whole space instead:
-a grid of synthetic players from perfect-and-fast down to mostly-wrong-and-slow,
-several hundred questions each, driven through the *real* engine.
+Both halves of that sentence were once false, and this script is how the second
+half was found.
+
+The vaulting half came first. The rolling window was carried across a promotion,
+so every promotion's evidence was already stale and a perfect player vaulted from
+adding-to-20 to two-step expressions in sixteen questions. It was fixed in
+`progress.ts` (the window is cleared on a tier change) and guarded by a handful
+of hand-written unit tests. A handful of cases is thin protection for the one
+property most likely to decide whether a seven-year-old keeps playing, so this
+script sweeps the whole space instead: a grid of synthetic players from
+perfect-and-fast down to mostly-wrong-and-slow, several hundred questions each,
+driven through the *real* engine.
+
+That sweep is what exposed the capping half. Promotion used to need accuracy AND
+an average inside par, and the grid showed the consequence in two cells nobody
+had thought to look at: the 100% row at "over par" and "dawdling" read `1 @--`.
+Four hundred questions, not one of them wrong, still on adding to 20 - because
+par at tier 1 is 5.1 seconds and a child hunting for digits on an on-screen
+keypad takes seven, and the adapter could not tell slow hands from weak maths.
+Speed is now a shortcut rather than a gate, and P5 and P6 below pin down both
+directions of that: an accurate player is never capped by his pace, and a quick
+one still reaches the top sooner.
 
 How it runs the engine
 ----------------------
@@ -93,7 +107,7 @@ QUESTIONS_PER_PLAYER = 400
 FIXED_NOW = "2026-01-01T09:00:00.000Z"
 
 # Profiles printed in full (tier-by-tier ladder) rather than just summarised.
-SPOTLIGHT = [(1.00, "fast"), (0.85, "brisk"), (0.85, "at par"), (0.65, "brisk")]
+SPOTLIGHT = [(1.00, "fast"), (1.00, "dawdling"), (0.85, "at par"), (0.65, "brisk")]
 SPOTLIGHT_BATCH = 6
 
 HARNESS = r"""
@@ -145,6 +159,16 @@ for (let step = 0; step <= 300; step++) {
   const factor = step / 100;
   const perfect = windowOf(ADAPT_WINDOW, ADAPT_WINDOW, probeTier, factor);
   if (nextTier(probeTier, perfect) > probeTier) slowestPromotingSpeed = factor;
+}
+
+// How much evidence a hopelessly slow but perfect player needs before the
+// accuracy-only route up opens. Discovered, not restated: PATIENCE_WINDOW is
+// exported, but probing keeps this report honest if the rule stops matching the
+// constant. `null` would mean no amount of correct answers ever promotes him,
+// which is the pinned-at-tier-1 bug this route exists to prevent.
+let patientWindow = null;
+for (let size = 1; size <= ADAPT_WINDOW * 4 && patientWindow === null; size++) {
+  if (nextTier(probeTier, windowOf(size, size, probeTier, 3.0)) > probeTier) patientWindow = size;
 }
 
 // ---------------------------------------------------------------------------
@@ -304,6 +328,7 @@ process.stdout.write(
       maxDemoteK,
       probeTier,
       slowestPromotingSpeed,
+      patientWindow,
       parAtProbeTier: parTimeForTier(probeTier),
     },
     sweep,
@@ -459,6 +484,10 @@ def main() -> int:
     print(f"  holds between those two scores")
     print(f"  a perfect window still promotes up to {thresholds['slowestPromotingSpeed']:.2f}x par "
           f"(par at tier {thresholds['probeTier']} = {thresholds['parAtProbeTier']:.1f}s)")
+    patient = thresholds["patientWindow"]
+    print(f"  past that, accuracy alone promotes on "
+          f"{'%d attempts' % patient if patient else 'NOTHING - speed is a hard cap'}, "
+          f"at any speed")
 
     print()
     print("Exhaustive sweep of nextTier()")
@@ -567,6 +596,50 @@ def main() -> int:
                 f"outside [{min_tier}, {max_tier}]"
             )
 
+    # P5: speed is a bonus, not a cap.
+    #
+    # This is the property the ramp did not have, and the grid above is where it
+    # showed: promotion required accuracy *and* an average inside par, par at
+    # tier 1 is 5.1 seconds, and a seven-year-old hunting for digits on an
+    # on-screen keypad takes seven. The 100% rows at "over par" and "dawdling"
+    # both read `1 @--` - four hundred questions, not one wrong, still on adding
+    # to 20. CLAUDE.md has always promised slowness is never punished, and a
+    # permanent difficulty cap is the harshest punishment this game has.
+    for player in sorted(players, key=key):
+        if player["accuracy"] < 1.0:
+            continue
+        if player["finalTier"] < max_tier:
+            violations.append(
+                f"accuracy-is-never-capped: {label(player)} (batch {player['batch']}) "
+                f"answered {player['observedAccuracy'] * 100:.0f}% of "
+                f"{player['questionsAsked']} questions correctly and finished at tier "
+                f"{player['finalTier']} of {max_tier}; pace must not cap the ramp"
+            )
+    if thresholds["patientWindow"] is None:
+        violations.append(
+            f"accuracy-is-never-capped: no window size up to {window * 4} promotes a "
+            "perfect player answering at 3x par; speed is acting as a hard ceiling"
+        )
+
+    # P6: ...but it is still a bonus, so being quick must reach the top sooner.
+    # Without this, "never capped" could be satisfied by ignoring the clock
+    # entirely, which would throw away the reason the speed meter is on screen.
+    for batch in BATCH_SIZES:
+        perfect = {
+            p["speedName"]: p["firstReached"].get(str(max_tier))
+            for p in players
+            if p["accuracy"] == 1.0 and p["batch"] == batch
+        }
+        quickest, slowest = SPEEDS[0]["name"], SPEEDS[-1]["name"]
+        if perfect.get(quickest) is not None and perfect.get(slowest) is not None:
+            if perfect[slowest] <= perfect[quickest]:
+                violations.append(
+                    f"speed-is-still-a-bonus: at batch {batch} a perfect {slowest} player "
+                    f"reached tier {max_tier} in {perfect[slowest]} questions, no slower than "
+                    f"a perfect {quickest} one at {perfect[quickest]}; answering quickly must "
+                    "buy a faster climb or the speed meter means nothing"
+                )
+
     # ---- calibration (reported, never enforced) ---------------------------
     print()
     print(f"Struggling players (below the {sinking_ratio * 100:.1f}% sinking threshold)")
@@ -610,7 +683,8 @@ def main() -> int:
         return 1
 
     print("OK: tier moves one step at a time, never vaults, never leaves the band,")
-    print(f"    and no player below {sinking_ratio * 100:.1f}% accuracy drifts upward.")
+    print(f"    no player below {sinking_ratio * 100:.1f}% accuracy drifts upward, no accurate")
+    print("    player is capped by his pace, and being quick still climbs sooner.")
     return 0
 
 

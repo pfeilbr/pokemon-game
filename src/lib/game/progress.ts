@@ -1,7 +1,7 @@
 import type { BattleSummary } from './battle';
 import { CREATURES, evolutionLine, findCreature, getCreature } from './creatures';
 import {
-  ADAPT_WINDOW,
+  PATIENCE_WINDOW,
   type Attempt,
   MIN_TIER,
   SKILLS,
@@ -361,7 +361,11 @@ export function applyBattleResult(
   const beforePartner = partnerFor(profile);
 
   const xpGained = xpForBattle(summary);
-  const observed = [...profile.recentAttempts, ...attempts].slice(-ADAPT_WINDOW);
+  // Kept to the *patient* window, not the adapt window: `nextTier` reads the
+  // last eight for its normal decision and the last sixteen for the accuracy-
+  // only route up, so trimming to eight here would silently make that route
+  // unreachable and pin a slow, accurate child at tier 1 forever.
+  const observed = [...profile.recentAttempts, ...attempts].slice(-PATIENCE_WINDOW);
   const tier = nextTier(profile.tier, observed);
 
   /**
@@ -479,7 +483,7 @@ function normaliseAttempts(input: unknown): Attempt[] {
       elapsedMs: num(a.elapsedMs, 0),
     });
   }
-  return out.slice(-ADAPT_WINDOW);
+  return out.slice(-PATIENCE_WINDOW);
 }
 
 /**

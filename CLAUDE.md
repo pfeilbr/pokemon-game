@@ -187,8 +187,20 @@ UI, and running the clock out costs nothing. Guarded by an E2E test that lets it
 empty and then checks a correct answer still lands normally.
 
 **Difficulty adapts on a rolling 8-attempt window** and moves one tier at a
-time. Promotion needs both accuracy _and_ comfort within par, so a lucky streak
-of easy questions cannot fling a child into fractions.
+time, so a lucky streak of easy questions cannot fling a child into fractions.
+
+**Promotion needs accuracy; speed only decides how fast it arrives.** There are
+two routes up: accurate and within par promotes on 8 attempts, sustained
+near-perfect accuracy promotes on 16 at any pace at all. The second route exists
+because the first was a trap — promotion used to require _both_, and par at tier
+1 is 5.1 seconds while a seven-year-old hunting for digits on an on-screen keypad
+takes seven. He could answer four hundred questions without a single mistake and
+stay on "adding to 20" forever, because the adapter could not tell slow hands
+from weak maths. That is the opposite of the rule below, and a permanent
+difficulty cap is the harshest punishment this game has.
+`scripts/simulate_difficulty.py` found it and now guards both directions: no
+accurate player is capped by his pace (P5), and a quick one still reaches the top
+sooner (P6).
 
 **`normaliseProfile` repairs anything it is given.** Save data outlives code.
 Unknown creature ids, negative XP, invented badges, corrupt dates and wrong

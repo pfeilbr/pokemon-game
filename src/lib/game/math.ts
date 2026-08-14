@@ -287,8 +287,19 @@ export type Attempt = {
 
 /** How many recent attempts feed the difficulty decision. */
 export const ADAPT_WINDOW = 8;
+
+/**
+ * The longer window that promotes on accuracy alone.
+ *
+ * Deliberately twice `ADAPT_WINDOW`, so being quick is always the faster route
+ * up and the clock keeps its meaning as a bonus.
+ */
+export const PATIENCE_WINDOW = ADAPT_WINDOW * 2;
+
 const LEVEL_UP_ACCURACY = 0.85;
 const LEVEL_DOWN_ACCURACY = 0.6;
+/** Near-perfect: 15 of 16. Patience is not a lower bar, it is a longer one. */
+const PATIENCE_ACCURACY = 0.9;
 
 /**
  * Suggests the next difficulty tier from recent performance.
@@ -296,6 +307,20 @@ const LEVEL_DOWN_ACCURACY = 0.6;
  * Deliberately gentle: it moves one tier at a time and needs a full window
  * before it will promote, so a lucky streak of easy questions cannot fling a
  * child into fractions.
+ *
+ * There are two ways up, and the second one exists because the first was a
+ * trap. Requiring accuracy *and* an average inside par sounds reasonable until
+ * you notice par at tier 1 is 5.1 seconds and a seven-year-old hunting for
+ * digits on an on-screen keypad takes seven. He answers four hundred questions
+ * without a single mistake and stays on "adding to 20" forever, because the
+ * adapter cannot tell slow hands from weak maths. That is the exact opposite of
+ * this game's rule that slowness is never punished - a permanent difficulty cap
+ * is the harshest punishment it has.
+ *
+ * So speed is a shortcut, not a gate: it buys the promotion in eight questions.
+ * Sustained near-perfect accuracy buys the same promotion in sixteen, at any
+ * pace at all. If he is getting essentially everything right, the questions are
+ * too easy, and how fast he taps is not evidence about whether he understands.
  */
 export function nextTier(currentTier: number, recent: readonly Attempt[]): number {
   const current = clampTier(currentTier);
@@ -311,8 +336,17 @@ export function nextTier(currentTier: number, recent: readonly Attempt[]): numbe
   if (accuracy >= LEVEL_UP_ACCURACY) {
     const avgMs = sample.reduce((s, a) => s + a.elapsedMs, 0) / sample.length;
     const par = parTimeForTier(current) * 1000;
-    // Accurate *and* comfortable within par - ready for harder.
+    // Accurate *and* comfortable within par - ready for harder, straight away.
     if (avgMs <= par) return clampTier(current + 1);
+
+    // The patient route. Note this asks a *higher* accuracy bar over a longer
+    // run, so it cannot be reached by the merely-good player the middle band is
+    // meant to hold steady.
+    const patient = recent.slice(-PATIENCE_WINDOW);
+    if (patient.length >= PATIENCE_WINDOW) {
+      const patientAccuracy = patient.filter((a) => a.correct).length / patient.length;
+      if (patientAccuracy >= PATIENCE_ACCURACY) return clampTier(current + 1);
+    }
     return current;
   }
   if (accuracy < LEVEL_DOWN_ACCURACY) return clampTier(current - 1);
