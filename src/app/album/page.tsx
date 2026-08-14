@@ -81,6 +81,7 @@ export default function AlbumPage() {
                     >
                       <CreatureArt
                         creature={creature}
+                        language={language}
                         size={72}
                         animate={false}
                         silhouette={!has}
@@ -112,7 +113,7 @@ export default function AlbumPage() {
             className="w-full max-w-sm animate-pop text-center"
             onClick={(e) => e.stopPropagation()}
           >
-            <CreatureArt creature={selected} size={140} className="mx-auto" />
+            <CreatureArt creature={selected} language={language} size={140} className="mx-auto" />
             <h3 className="mt-2 text-2xl font-black text-white">{selected.name[language]}</h3>
             <div className="my-2 flex justify-center">
               <ElementChip
@@ -122,7 +123,8 @@ export default function AlbumPage() {
             </div>
             <p className="text-sm text-slate-300">{selected.flavor[language]}</p>
             <p className="mt-3 font-mono text-xs text-slate-500">
-              HP {selected.baseHp} · ATK {selected.baseAtk} · {tr('stage')} {selected.stage}
+              {tr('health')} {selected.baseHp} · {tr('attack')} {selected.baseAtk} · {tr('stage')}{' '}
+              {selected.stage}
             </p>
             <button
               type="button"

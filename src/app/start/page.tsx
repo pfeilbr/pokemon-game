@@ -96,7 +96,12 @@ export default function StartPage() {
                     ...(selected ? { boxShadow: `0 0 0 4px ${style.color}` } : {}),
                   }}
                 >
-                  <CreatureArt creature={creature} size={96} animate={selected} />
+                  <CreatureArt
+                    creature={creature}
+                    language={language}
+                    size={96}
+                    animate={selected}
+                  />
                   <span className="text-base font-extrabold text-white">
                     {creature.name[language]}
                   </span>

@@ -66,7 +66,7 @@ export default function HomePage() {
           style={{ background: `linear-gradient(150deg, ${style.color}26, rgba(19,28,51,0.92))` }}
         >
           <div className="flex items-center gap-4">
-            <CreatureArt creature={partner} size={110} />
+            <CreatureArt creature={partner} language={language} size={110} />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-slate-300">
                 {tr('hello')}, <span className="text-white">{profile.trainerName}</span>
@@ -77,7 +77,12 @@ export default function HomePage() {
               <div className="mt-1.5 mb-3">
                 <ElementChip element={partner.element} size="sm" label={style.label[language]} />
               </div>
-              <XpBar into={progress.into} span={progress.span} level={progress.level} />
+              <XpBar
+                into={progress.into}
+                span={progress.span}
+                level={progress.level}
+                language={language}
+              />
               <p className="mt-1.5 text-xs text-slate-400">
                 {evolvesAt ? `${tr('evolvesAt')} ${evolvesAt}` : tr('finalForm')}
               </p>

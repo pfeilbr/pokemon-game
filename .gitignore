@@ -13,3 +13,10 @@ playwright-report/
 blob-report/
 .playwright/
 .DS_Store
+
+# Python bytecode from the audit scripts. Untracked and un-ignored, this trips
+# audit_assets.py, which rightly objects to a stray directory appearing in the
+# tree - the same reason CLAUDE.md's CI-reproduction recipe parks
+# mobile/node_modules outside the repo rather than in a .bak beside it.
+__pycache__/
+*.pyc

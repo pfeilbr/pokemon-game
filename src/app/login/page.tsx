@@ -37,9 +37,7 @@ function LoginForm() {
             : body.error === 'mismatch'
               ? tr('wrongPin')
               : body.error === 'locked'
-                ? language === 'zh'
-                  ? '尝试次数过多，请15分钟后再试。'
-                  : 'Too many tries. Wait 15 minutes and try again.'
+                ? tr('tooManyTries')
                 : tr('somethingWentWrong'),
         );
         return;
@@ -58,16 +56,8 @@ function LoginForm() {
   if (!session.accountsAvailable) {
     return (
       <Panel className="text-center">
-        <p className="text-lg font-bold text-white">
-          {language === 'zh'
-            ? '此部署未启用账号功能。'
-            : 'Accounts are not enabled on this deployment.'}
-        </p>
-        <p className="mt-2 text-sm text-slate-400">
-          {language === 'zh'
-            ? '游戏进度会保存在本设备上。'
-            : 'Your progress is saved on this device instead.'}
-        </p>
+        <p className="text-lg font-bold text-white">{tr('accountsUnavailable')}</p>
+        <p className="mt-2 text-sm text-slate-400">{tr('savedOnDeviceInstead')}</p>
         <Link href="/" className="mt-4 inline-block font-bold text-amber-300 underline">
           {tr('goHome')}
         </Link>

@@ -36,6 +36,10 @@ export const STRINGS = {
   progress: { en: 'Progress', zh: '成长记录' },
   progressSub: { en: 'Badges and maths stats', zh: '徽章与数学统计' },
   level: { en: 'Level', zh: '等级' },
+  /** The abbreviation on the XP bar, where "Level" would not fit. */
+  levelShort: { en: 'Lv', zh: '等级' },
+  /** Shown in place of the XP numbers once there is no next level. */
+  maxLevelReached: { en: 'MAX', zh: '满级' },
   mathLevel: { en: 'Maths level', zh: '数学等级' },
   streak: { en: 'Day streak', zh: '连续天数' },
   caught: { en: 'Caught', zh: '已收集' },
@@ -45,12 +49,12 @@ export const STRINGS = {
 
   // Battle
   chooseMove: { en: 'Pick your move', zh: '选择招式' },
-  yourTurn: { en: 'Your turn', zh: '轮到你了' },
   charge: { en: 'Charge', zh: '能量' },
   combo: { en: 'Combo', zh: '连击' },
   answer: { en: 'Answer', zh: '答案' },
   submit: { en: 'Go!', zh: '确定！' },
   clear: { en: 'Clear', zh: '清除' },
+  backspace: { en: 'Backspace', zh: '退格' },
   correct: { en: 'Correct!', zh: '答对了！' },
   speedBonus: { en: 'Speed bonus', zh: '速度加成' },
   takeYourTime: { en: 'Take your time', zh: '慢慢来' },
@@ -95,6 +99,9 @@ export const STRINGS = {
   albumTitle: { en: 'Creature album', zh: '伙伴图鉴' },
   notCaughtYet: { en: 'Not caught yet', zh: '尚未收集' },
   stage: { en: 'Stage', zh: '阶段' },
+  /** Also the health bar's accessible name, which is why it is a word. */
+  health: { en: 'Health', zh: '生命' },
+  attack: { en: 'Attack', zh: '攻击' },
 
   // Progress / stats
   progressTitle: { en: 'Your progress', zh: '你的成长' },
@@ -102,6 +109,8 @@ export const STRINGS = {
   mathsBreakdown: { en: 'Maths skills', zh: '数学能力' },
   battlesWon: { en: 'Battles won', zh: '获胜场次' },
   questionsAnswered: { en: 'Questions answered', zh: '答题总数' },
+  /** The per-skill row reads "85% · 3.4s · 12"; this names the middle number
+   *  on hover, which is the parent-facing half of this screen. */
   avgTime: { en: 'Average time', zh: '平均用时' },
   noDataYet: { en: 'Play a battle to see your stats.', zh: '战斗之后就能看到统计了。' },
   seconds: { en: 's', zh: '秒' },
@@ -124,6 +133,14 @@ export const STRINGS = {
   needAccount: { en: 'Create a new account', zh: '创建新账号' },
   playWithoutAccount: { en: 'Just play (saves on this device)', zh: '直接玩（保存在本设备）' },
   savedLocally: { en: 'Saving on this device', zh: '保存在本设备' },
+  accountsUnavailable: {
+    en: 'Accounts are not enabled on this deployment.',
+    zh: '此部署未启用账号功能。',
+  },
+  savedOnDeviceInstead: {
+    en: 'Your progress is saved on this device instead.',
+    zh: '游戏进度会保存在本设备上。',
+  },
   savedToAccount: { en: 'Saved to your account', zh: '已保存到账号' },
   syncing: { en: 'Saving…', zh: '保存中…' },
 
@@ -132,6 +149,13 @@ export const STRINGS = {
   pinFourDigits: { en: 'PIN must be 4 digits', zh: 'PIN 必须是4位数字' },
   wrongPin: { en: 'That name and PIN do not match', zh: '名字和 PIN 不匹配' },
   nameTaken: { en: 'That name is taken - try another', zh: '这个名字已被使用，换一个吧' },
+  // The lockout, not the hash, is what makes a 4-digit PIN safe (see
+  // accounts.ts), so this message is part of the security design and needs to
+  // be readable in both languages.
+  tooManyTries: {
+    en: 'Too many tries. Wait 15 minutes and try again.',
+    zh: '尝试次数过多，请15分钟后再试。',
+  },
   somethingWentWrong: { en: 'Something went wrong. Try again.', zh: '出错了，请重试。' },
 
   // Settings
@@ -140,6 +164,12 @@ export const STRINGS = {
   language: { en: 'Language', zh: '语言' },
   on: { en: 'On', zh: '开' },
   off: { en: 'Off', zh: '关' },
+  startOver: { en: 'Start over', zh: '重新开始' },
+  confirmReset: {
+    en: 'Delete all progress? This cannot be undone.',
+    zh: '确定要删除所有进度吗？此操作无法撤销。',
+  },
+  deleteProgress: { en: 'Delete', zh: '删除' },
 } as const;
 
 export type StringKey = keyof typeof STRINGS;

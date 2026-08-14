@@ -71,7 +71,7 @@ export default function PlayPage() {
 
         <Panel className="flex items-center justify-center gap-3">
           <span className="text-sm font-bold text-slate-400">{tr('yourType')}</span>
-          <CreatureArt creature={partner} size={52} animate={false} />
+          <CreatureArt creature={partner} language={language} size={52} animate={false} />
           <span className="font-extrabold text-white">{partner.name[language]}</span>
           <ElementChip
             element={partner.element}
@@ -109,7 +109,7 @@ export default function PlayPage() {
                   background: `linear-gradient(160deg, ${style.color}22, rgba(19,28,51,0.9))`,
                 }}
               >
-                <CreatureArt creature={foe} size={104} animate={false} />
+                <CreatureArt creature={foe} language={language} size={104} animate={false} />
                 <span className="text-lg font-extrabold text-white">{foe.name[language]}</span>
                 <ElementChip element={foe.element} size="sm" label={style.label[language]} />
                 <span className={`text-sm font-bold ${verdict.tone}`}>

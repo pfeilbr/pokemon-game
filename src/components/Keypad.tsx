@@ -18,6 +18,8 @@ type Props = {
   disabled?: boolean;
   submitLabel: string;
   clearLabel: string;
+  /** The ⌫ key draws a glyph, so its accessible name is the only text it has. */
+  backspaceLabel: string;
   onKeyPress?: () => void;
 };
 
@@ -30,6 +32,7 @@ export function Keypad({
   disabled = false,
   submitLabel,
   clearLabel,
+  backspaceLabel,
   onKeyPress,
 }: Props) {
   const pressDigit = (digit: string) => {
@@ -134,7 +137,7 @@ export function Keypad({
           className={`${keyClass} text-3xl`}
           disabled={disabled}
           onClick={backspace}
-          aria-label="Backspace"
+          aria-label={backspaceLabel}
         >
           ⌫
         </button>

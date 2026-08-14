@@ -1,6 +1,7 @@
 import { Fragment } from 'react';
 import { GRADIENT_REF, type Gradient, type Shape, drawCreature } from '@/lib/game/art';
 import type { Creature } from '@/lib/game/creatures';
+import type { Language } from '@/lib/game/progress';
 
 /**
  * The web renderer.
@@ -15,6 +16,12 @@ import type { Creature } from '@/lib/game/creatures';
 
 type Props = {
   creature: Creature;
+  /**
+   * Which name a screen reader announces. Required: the accessible name used
+   * to be `creature.name.en` unconditionally, so a child playing in Chinese
+   * heard the English name of every creature on screen.
+   */
+  language: Language;
   /** Rendered size in pixels. */
   size?: number;
   /** Mirrors the creature to face left - used for the opponent. */
@@ -113,6 +120,7 @@ function Defs({ gradients }: { gradients: Gradient[] }) {
 
 export function CreatureArt({
   creature,
+  language,
   size = 128,
   facing = 'right',
   animate = true,
@@ -127,7 +135,7 @@ export function CreatureArt({
       width={size}
       height={size}
       role="img"
-      aria-label={creature.name.en}
+      aria-label={creature.name[language]}
       className={[animate ? 'animate-float' : '', className].filter(Boolean).join(' ')}
       style={{ transform: facing === 'left' ? 'scaleX(-1)' : undefined, overflow: 'visible' }}
     >

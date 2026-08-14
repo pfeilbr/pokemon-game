@@ -2,6 +2,8 @@
 
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { ELEMENT_STYLE, type Element } from '@/lib/game/elements';
+import type { Language } from '@/lib/game/progress';
+import { t } from '@/lib/i18n';
 
 /** Shared primitives. Every tappable thing is at least 56px tall. */
 
@@ -67,7 +69,12 @@ export function ElementChip({
 }: {
   element: Element;
   size?: 'sm' | 'md';
-  label?: string;
+  /**
+   * Required, not optional. It used to default to `style.label.en`, so a chip
+   * rendered without it silently showed "Ember" to a child playing in Chinese
+   * - and the default made that unnoticeable at the call site.
+   */
+  label: string;
 }) {
   const style = ELEMENT_STYLE[element];
   return (
@@ -83,7 +90,7 @@ export function ElementChip({
       }}
     >
       <span aria-hidden>{style.icon}</span>
-      {label ?? style.label.en}
+      {label}
     </span>
   );
 }
@@ -91,11 +98,14 @@ export function ElementChip({
 export function HealthBar({
   current,
   max,
+  language,
   label,
   compact = false,
 }: {
   current: number;
   max: number;
+  /** Only for the accessible name; the bar itself is numbers and colour. */
+  language: Language;
   label?: string;
   compact?: boolean;
 }) {
@@ -120,7 +130,7 @@ export function HealthBar({
         aria-valuenow={Math.ceil(current)}
         aria-valuemin={0}
         aria-valuemax={max}
-        aria-label={label ?? 'Health'}
+        aria-label={label ?? t('health', language)}
       >
         <div
           className="h-full rounded-full transition-[width] duration-500 ease-out"
@@ -134,13 +144,27 @@ export function HealthBar({
   );
 }
 
-export function XpBar({ into, span, level }: { into: number; span: number; level: number }) {
+export function XpBar({
+  into,
+  span,
+  level,
+  language,
+}: {
+  into: number;
+  span: number;
+  level: number;
+  language: Language;
+}) {
   const ratio = span > 0 ? Math.max(0, Math.min(1, into / span)) : 1;
   return (
     <div className="w-full">
       <div className="mb-1 flex items-baseline justify-between text-xs font-bold text-slate-300">
-        <span>Lv {level}</span>
-        <span className="font-mono text-slate-400">{span > 0 ? `${into}/${span}` : 'MAX'}</span>
+        <span>
+          {t('levelShort', language)} {level}
+        </span>
+        <span className="font-mono text-slate-400">
+          {span > 0 ? `${into}/${span}` : t('maxLevelReached', language)}
+        </span>
       </div>
       <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-900/80 ring-1 ring-white/10">
         <div
@@ -178,8 +202,10 @@ export function ChargeMeter({
           />
         ))}
       </div>
+      {/* The label is already translated; "3/3" needs no words, which keeps
+          this readout out of the business of assembling a sentence. */}
       <span className="sr-only">
-        {charge} of {max}
+        {label} {charge}/{max}
       </span>
     </div>
   );

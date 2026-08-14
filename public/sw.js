@@ -112,11 +112,11 @@ async function precacheShell() {
       const response = await fetch(url, { cache: 'reload', credentials: 'same-origin' });
       if (!response.ok) continue;
       const html = await response.clone().text();
-      const document = await replayable(response);
-      await cache.put(url, document.clone());
+      const page = await replayable(response);
+      await cache.put(url, page.clone());
       // The export redirects `/album` to `/album/`; store both keys so a
       // navigation to either one is served rather than half of them missing.
-      if (response.url && response.url !== url) await cache.put(response.url, document);
+      if (response.url && response.url !== url) await cache.put(response.url, page);
       for (const asset of assetsIn(html)) assets.add(asset);
     } catch {
       // Installing while already offline is allowed to be incomplete. The

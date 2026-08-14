@@ -123,11 +123,7 @@ export default function SettingsPage() {
         <Panel className="flex flex-col gap-3">
           {confirmingReset ? (
             <>
-              <p className="font-bold text-rose-300">
-                {language === 'zh'
-                  ? '确定要删除所有进度吗？此操作无法撤销。'
-                  : 'Delete all progress? This cannot be undone.'}
-              </p>
+              <p className="font-bold text-rose-300">{tr('confirmReset')}</p>
               <div className="flex gap-2">
                 <Button variant="ghost" full onClick={() => setConfirmingReset(false)}>
                   {tr('back')}
@@ -140,7 +136,7 @@ export default function SettingsPage() {
                     router.push('/start');
                   }}
                 >
-                  {language === 'zh' ? '删除' : 'Delete'}
+                  {tr('deleteProgress')}
                 </Button>
               </div>
             </>
@@ -150,7 +146,7 @@ export default function SettingsPage() {
               onClick={() => setConfirmingReset(true)}
               className="tap flex w-full items-center justify-center text-sm text-slate-500 underline"
             >
-              {language === 'zh' ? '重新开始' : 'Start over'}
+              {tr('startOver')}
             </button>
           )}
         </Panel>

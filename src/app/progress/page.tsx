@@ -108,7 +108,7 @@ export default function ProgressPage() {
                       <span className="font-bold text-slate-200">
                         {SKILL_META[skill].label[language]}
                       </span>
-                      <span className="font-mono text-xs text-slate-400">
+                      <span className="font-mono text-xs text-slate-400" title={tr('avgTime')}>
                         {pct}% · {averageSeconds(stat).toFixed(1)}
                         {tr('seconds')} · {stat.attempts}
                       </span>

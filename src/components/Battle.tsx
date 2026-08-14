@@ -192,11 +192,12 @@ export function Battle({ playerCreatureId, opponentId, onExit, onRematch }: Prop
                 <span className="truncate font-extrabold text-white">{foe.name[language]}</span>
                 <ElementChip element={foe.element} size="sm" label={foeStyle.label[language]} />
               </div>
-              <HealthBar current={state.foe.hp} max={state.foe.maxHp} />
+              <HealthBar current={state.foe.hp} max={state.foe.maxHp} language={language} />
             </div>
             <div key={state.log.length} className={struck === 'foe' ? 'animate-shake' : ''}>
               <CreatureArt
                 creature={foe}
+                language={language}
                 size={96}
                 facing="left"
                 animate
@@ -248,6 +249,7 @@ export function Battle({ playerCreatureId, opponentId, onExit, onRematch }: Prop
             <div key={state.log.length} className={struck === 'player' ? 'animate-shake' : ''}>
               <CreatureArt
                 creature={player}
+                language={language}
                 size={96}
                 animate
                 className="h-[68px] w-[68px] sm:h-24 sm:w-24"
@@ -262,7 +264,7 @@ export function Battle({ playerCreatureId, opponentId, onExit, onRematch }: Prop
                   label={playerStyle.label[language]}
                 />
               </div>
-              <HealthBar current={state.player.hp} max={state.player.maxHp} />
+              <HealthBar current={state.player.hp} max={state.player.maxHp} language={language} />
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                 <ChargeMeter charge={state.charge} max={MAX_CHARGE} label={tr('charge')} />
                 {state.combo > 1 && (
@@ -327,6 +329,7 @@ export function Battle({ playerCreatureId, opponentId, onExit, onRematch }: Prop
             onSubmit={submit}
             submitLabel={isCatch ? tr('catchIt') : tr('submit')}
             clearLabel={tr('clear')}
+            backspaceLabel={tr('backspace')}
             onKeyPress={() => cue('tap')}
           />
         )}
@@ -521,7 +524,7 @@ function VictoryScreen({
 
       {won && (
         <Panel className="w-full max-w-sm">
-          <CreatureArt creature={foe} size={120} className="mx-auto" />
+          <CreatureArt creature={foe} language={language} size={120} className="mx-auto" />
           <p
             className={`mt-2 text-xl font-black ${summary.caught ? 'text-emerald-400' : 'text-slate-400'}`}
           >

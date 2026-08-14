@@ -13,7 +13,7 @@ import { CreatureArt } from './CreatureArt';
 describe('creature art', () => {
   it('renders every creature without throwing', () => {
     for (const creature of CREATURES) {
-      const markup = renderToStaticMarkup(<CreatureArt creature={creature} />);
+      const markup = renderToStaticMarkup(<CreatureArt creature={creature} language="en" />);
       expect(markup).toContain('<svg');
       expect(markup).toContain(creature.name.en);
     }
@@ -23,7 +23,7 @@ describe('creature art', () => {
     const cards = CREATURES.map((c) => {
       const style = ELEMENT_STYLE[c.element];
       return `<figure style="background:linear-gradient(160deg, ${style.color}22, #131c33); border:1px solid ${style.color}55">
-        ${renderToStaticMarkup(<CreatureArt creature={c} size={140} animate={false} />)}
+        ${renderToStaticMarkup(<CreatureArt creature={c} language="en" size={140} animate={false} />)}
         <figcaption><b>${c.name.en}</b> <span>${c.name.zh}</span><br/><small>${style.icon} ${style.label.en} · stage ${c.stage}</small></figcaption>
       </figure>`;
     }).join('');

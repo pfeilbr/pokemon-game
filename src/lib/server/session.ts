@@ -39,7 +39,11 @@ export async function readSession(): Promise<SessionPayload | null> {
   if (!token) return null;
 
   try {
-    const { payload } = await jwtVerify(token, secret);
+    // The algorithm is pinned rather than taken from the token's own header.
+    // jose already refuses to hand a symmetric key to an asymmetric algorithm,
+    // so this closes no hole today - it closes the one that opens the day the
+    // key type changes and nobody re-reads this function.
+    const { payload } = await jwtVerify(token, secret, { algorithms: ['HS256'] });
     const { trainerId, displayName, provider } = payload as Partial<SessionPayload>;
     if (typeof trainerId !== 'string' || typeof displayName !== 'string') return null;
     if (provider !== 'pin' && provider !== 'google') return null;
@@ -50,7 +54,14 @@ export async function readSession(): Promise<SessionPayload | null> {
   }
 }
 
-const COOKIE_OPTIONS = {
+/**
+ * The flags every cookie this app sets must carry.
+ *
+ * Exported so the OAuth state cookie inherits them rather than re-declaring a
+ * near-copy: two hand-maintained flag lists are how one of them ends up
+ * missing `httpOnly` without anyone noticing.
+ */
+export const COOKIE_OPTIONS = {
   httpOnly: true,
   sameSite: 'lax',
   path: '/',

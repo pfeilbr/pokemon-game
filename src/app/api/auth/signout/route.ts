@@ -1,9 +1,9 @@
-import { NextResponse } from 'next/server';
+import { jsonOk, route } from '@/lib/server/http';
 import { clearSessionCookie } from '@/lib/server/session';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST() {
+export const POST = route('POST /api/auth/signout', async () => {
   await clearSessionCookie();
-  return NextResponse.json({ ok: true });
-}
+  return jsonOk({ ok: true });
+});

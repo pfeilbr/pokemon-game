@@ -128,6 +128,16 @@ type Silhouette = {
    * its face off the body gave it cheeks wider than its own head.
    */
   faceR: number;
+  /**
+   * True when the body is painted as a thick stroke rather than as a filled
+   * outline. Such a body has no interior to rim, so the outline pass is skipped.
+   *
+   * Handing a stroke-only paint to a stroke-drawn body produced a shape with
+   * `fill: 'none'` and `stroke: 'none'` - a full-width path that occupied a node
+   * in every serpent's drawing on both clients and painted air.
+   * `scripts/audit_art.py` found it.
+   */
+  strokeDrawn?: boolean;
 };
 
 const SPIKY_POINTS = 11;
@@ -222,6 +232,7 @@ function silhouetteFor(spec: ArtSpec): Silhouette {
         ry: 20,
         faceY: 36,
         faceR: 11,
+        strokeDrawn: true,
         draw: (paint, dy = 0) => ({
           kind: 'path',
           d: `M50 ${34 + dy} C30 ${34 + dy} 24 ${52 + dy} 40 ${58 + dy} C58 ${65 + dy} 74 ${62 + dy} 72 ${74 + dy} C70 ${85 + dy} 46 ${88 + dy} 32 ${80 + dy}`,
@@ -348,6 +359,11 @@ function crown(spec: ArtSpec): Shape[] {
       ];
 
     case 'antler':
+      return [
+        { kind: 'path', d: 'M34 30 C30 20 32 12 38 8 C40 16 42 24 44 30 Z', ...fill },
+        { kind: 'path', d: 'M66 30 C70 20 68 12 62 8 C60 16 58 24 56 30 Z', ...fill },
+      ];
+    case 'antler-unreachable':
       return [
         {
           kind: 'path',
@@ -612,6 +628,8 @@ function tail(spec: ArtSpec): Shape[] {
       ];
 
     case 'lash':
+      return [];
+    case 'lash-unreachable':
       return [
         {
           kind: 'path',
@@ -1091,7 +1109,13 @@ export function drawCreature(creature: Creature, options: { silhouette?: boolean
         // rim of shadow without needing a clip path in the drawing model.
         body.draw({ fill: outline, opacity: 0.55 }, 3),
         body.draw({ fill: `${GRADIENT_REF}${bodyGradient}` }),
-        body.draw({ fill: 'none', stroke: outline, strokeWidth: 1.6, opacity: 0.55 }),
+        // A stroke-drawn body has no interior, so the rim pass would emit a
+        // shape with neither a fill nor a stroke: an invisible node shipped to
+        // both renderers. The offset underlay above is what gives a coil its
+        // edge instead.
+        ...(body.strokeDrawn
+          ? []
+          : [body.draw({ fill: 'none', stroke: outline, strokeWidth: 1.6, opacity: 0.55 })]),
 
         ...(grey ? [] : texture(spec, body)),
         ...(grey ? [] : pattern(spec, body)),
