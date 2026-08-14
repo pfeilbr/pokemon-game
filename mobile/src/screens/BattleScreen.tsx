@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import {
   CRIT_THRESHOLD,
@@ -27,6 +28,7 @@ import {
   getCreature,
   levelFromXp,
   partnerFor,
+  promptFontSize,
   speedFraction,
   summarise,
 } from '../engine';
@@ -46,6 +48,36 @@ import { Button, ChargeMeter, ElementChip, HealthBar, Panel, Stat } from '../ui/
 
 /** How long the hit message stays up before the next turn. */
 const RESOLVE_MS = 1500;
+
+/**
+ * The prompt's type scale, in points, and the layout facts that decide how much
+ * room it has.
+ *
+ * Only the numbers are here. The rule that turns them into a size is
+ * `promptFontSize` in the shared engine, which the web client calls with its
+ * own numbers, so "shrink a long question until it fits" cannot come to mean
+ * two different things on the two screens. `scripts/audit_prompt_fit.py` reads
+ * this table out of the source and fails the build if the longest prompt the
+ * generator can produce would not fit inside it.
+ */
+const PROMPT_TYPE = {
+  /** The size the prompt has always rendered at here. */
+  full: 44,
+  /**
+   * A floor, so nothing renders microscopically small. It should never be
+   * reached; the audit fails if any real prompt would hit it at `narrowest`.
+   */
+  min: 18,
+  /** The narrowest phone this screen supports - an iPhone SE in portrait. */
+  narrowest: 320,
+  /**
+   * Everything between the screen edge and the prompt's own line box: the
+   * scroll content's `space.md` padding, the card's `space.md` padding and the
+   * card's 1px border, twice over. The safe-area inset is not in it because
+   * `App.tsx` takes only the top and bottom edges.
+   */
+  gutter: 50,
+} as const;
 
 export function BattleScreen({
   profile,
@@ -79,6 +111,9 @@ export function BattleScreen({
   const [answer, setAnswer] = useState('');
   const [outcome, setOutcome] = useState<BattleOutcome | null>(null);
   const recorded = useRef(false);
+  // Read rather than assumed, so a rotation or an iPad resizes the question
+  // instead of leaving it at the size the narrowest phone needed.
+  const { width } = useWindowDimensions();
 
   const player = getCreature(state.player.creatureId);
   const foe = getCreature(state.foe.creatureId);
@@ -160,7 +195,24 @@ export function BattleScreen({
       {solving && state.problem ? (
         <View style={[styles.problemCard, isCatch && styles.catchCard]}>
           <Text style={styles.problemLabel}>{isCatch ? tr('catchPrompt') : tr('answer')}</Text>
-          <Text testID="problem" style={styles.problemText}>
+          {/* Sized from the question itself, never from which skill asked it.
+              The chess strand's longest prompt is 21 characters against a
+              previous longest of 12, and at a fixed 44pt it took two lines on a
+              phone - which changes what the child is reading while the speed
+              meter drains under it. */}
+          <Text
+            testID="problem"
+            style={[
+              styles.problemText,
+              {
+                fontSize: promptFontSize(state.problem.prompt, {
+                  full: PROMPT_TYPE.full,
+                  min: PROMPT_TYPE.min,
+                  lineBox: width - PROMPT_TYPE.gutter,
+                }),
+              },
+            ]}
+          >
             {state.problem.prompt}
           </Text>
           {state.problemShownAt !== null && (
@@ -542,7 +594,10 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1.5,
   },
-  problemText: { color: colors.text, fontSize: 44, fontWeight: '900', textAlign: 'center' },
+  // No fontSize here on purpose: it is always supplied inline, from
+  // PROMPT_TYPE through the shared rule. A second one here would be the copy
+  // that quietly stops matching.
+  problemText: { color: colors.text, fontWeight: '900', textAlign: 'center' },
   meterWrap: { width: '100%', maxWidth: 320, marginTop: space.sm },
   meterLabels: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
   meterLabel: { color: '#cbd5e1', fontSize: 12, fontWeight: '800' },

@@ -25,6 +25,7 @@ import {
   summarise,
 } from '@/lib/game/battle';
 import { MAX_CHARGE } from '@/lib/game/moves';
+import { promptFontSize } from '@/lib/game/prompt';
 import {
   type BattleOutcome,
   applyBattleResult,
@@ -51,6 +52,73 @@ type Props = {
 /** How long the hit animation and damage numbers stay up. */
 const RESOLVE_MS = 1500;
 
+/**
+ * The prompt's type scale, in CSS pixels, and the layout facts that decide how
+ * much room it has.
+ *
+ * Only the numbers are here. The rule that turns them into a size lives in
+ * `@/lib/game/prompt`, which the iOS client calls with its own numbers, so
+ * "shrink a long question until it fits" cannot end up meaning two different
+ * things on two screens.
+ *
+ * Every entry restates something the markup below already says, which is
+ * exactly why `e2e/prompt-fit.spec.ts` measures the real line box at three
+ * viewports and fails if these have drifted from it.
+ */
+export const PROMPT_TYPE = {
+  /** `text-4xl`: the size the prompt has always rendered at on a phone. */
+  full: 36,
+  /** `sm:text-6xl`, from the `sm` breakpoint up. */
+  fullWide: 60,
+  /** Tailwind's `sm`. */
+  wideFrom: 640,
+  /**
+   * A floor, so nothing can render microscopically small. It should never be
+   * reached: `scripts/audit_prompt_fit.py` fails if any prompt the generator
+   * can produce would hit it at `narrowest`.
+   */
+  min: 18,
+  /** The narrowest phone this layout is built for - an iPhone SE in portrait. */
+  narrowest: 320,
+  /** `AppShell`'s `max-w-5xl`. */
+  shellMax: 1024,
+  /** `<main>`'s `px-4` (2 x 16) plus the prompt card's two 1px borders. */
+  gutter: 34,
+  /** Tailwind's `lg`, where the battle splits into two columns. */
+  columnsFrom: 1024,
+  /** The `22rem` action column plus the `gap-3` (0.75rem) between them. */
+  sidebar: 364,
+} as const;
+
+/** How wide the prompt's line box is at a given viewport width. */
+export function promptLineBox(viewportWidth: number): number {
+  const shell = Math.min(viewportWidth, PROMPT_TYPE.shellMax);
+  const inner = shell - PROMPT_TYPE.gutter;
+  return viewportWidth >= PROMPT_TYPE.columnsFrom ? inner - PROMPT_TYPE.sidebar : inner;
+}
+
+/**
+ * The viewport width, in CSS pixels.
+ *
+ * `clientWidth` rather than `innerWidth`, which counts a classic scrollbar as
+ * usable width and would hand the prompt room that is not there. It starts at
+ * the narrowest supported phone so the server-rendered markup and the first
+ * client render agree - the prompt is briefly smaller than it needs to be,
+ * never larger than it fits.
+ */
+function useViewportWidth(): number {
+  const [width, setWidth] = useState<number>(PROMPT_TYPE.narrowest);
+
+  useEffect(() => {
+    const read = () => setWidth(document.documentElement.clientWidth);
+    read();
+    window.addEventListener('resize', read);
+    return () => window.removeEventListener('resize', read);
+  }, []);
+
+  return width;
+}
+
 export function Battle({ playerCreatureId, opponentId, onExit, onRematch }: Props) {
   const router = useRouter();
   const { profile, update, language, tr, cue } = useGame();
@@ -76,6 +144,7 @@ export function Battle({ playerCreatureId, opponentId, onExit, onRematch }: Prop
   const [answer, setAnswer] = useState('');
   const [outcome, setOutcome] = useState<BattleOutcome | null>(null);
   const recorded = useRef(false);
+  const viewportWidth = useViewportWidth();
 
   const player = getCreature(state.player.creatureId);
   const foe = getCreature(state.foe.creatureId);
@@ -219,9 +288,29 @@ export function Battle({ playerCreatureId, opponentId, onExit, onRematch }: Prop
             <span className="text-xs font-bold tracking-widest text-slate-300 uppercase">
               {isCatch ? tr('catchPrompt') : tr('answer')}
             </span>
+            {/* Sized from the question itself rather than from a fixed class.
+                The chess strand's longest prompt is 21 characters against a
+                previous longest of 12, and at `text-4xl` it wrapped onto two
+                lines on every phone - which changes what the child is reading
+                while the speed meter drains under it.
+
+                Deliberately still wrappable. If the width model is ever wrong
+                on some device's fallback font, two lines is a bad question but
+                `nowrap` would be no question at all - it would run off the side
+                of the card. */}
             <span
-              className="text-center text-4xl leading-tight font-black text-white sm:text-6xl"
+              className="text-center leading-tight font-black text-white"
               data-testid="problem"
+              style={{
+                fontSize: `${promptFontSize(state.problem.prompt, {
+                  full:
+                    viewportWidth >= PROMPT_TYPE.wideFrom
+                      ? PROMPT_TYPE.fullWide
+                      : PROMPT_TYPE.full,
+                  min: PROMPT_TYPE.min,
+                  lineBox: promptLineBox(viewportWidth),
+                }).toFixed(2)}px`,
+              }}
             >
               {state.problem.prompt}
             </span>

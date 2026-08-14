@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "trainerName": "Leo",
+  "starterId": "cindik",
+  "xp": 900,
+  "caught": [
+    "cindik",
+    "blazur",
+    "sproutle",
+    "bublet",
+    "zaplet",
+    "pebblo",
+    "flurro",
+    "splashen"
+  ],
+  "badges": ["first-win", "combo-5", "collector-6", "ten-wins", "tier-5", "evolved"],
+  "battlesWon": 14,
+  "battlesLost": 3,
+  "problemsCorrect": 121,
+  "problemsTotal": 140,
+  "bestCombo": 9,
+  "tier": 6,
+  "recentAttempts": [],
+  "skillStats": {
+    "add1": { "attempts": 30, "correct": 29, "totalMs": 54000 },
+    "sub1": { "attempts": 24, "correct": 21, "totalMs": 62000 },
+    "add2": { "attempts": 22, "correct": 19, "totalMs": 79000 },
+    "missingAdd": { "attempts": 18, "correct": 14, "totalMs": 91000 },
+    "mul1": { "attempts": 28, "correct": 24, "totalMs": 104000 },
+    "div1": { "attempts": 18, "correct": 14, "totalMs": 118000 }
+  },
+  "streak": { "current": 4, "best": 6, "lastPlayed": "2026-08-11" },
+  "settings": { "language": "en", "sound": true },
+  "createdAt": "2026-08-01T10:00:00.000Z",
+  "updatedAt": "2026-08-11T10:00:00.000Z"
+}
