@@ -48,7 +48,7 @@ platform API rather than a fork of a rule:
 | Web Audio cues           | Taptic Engine (`expo-haptics`) | Reads better in one hand, and needs no audio assets — the no-bundled-media property survives. |
 | `prefers-reduced-motion` | `AccessibilityInfo`            | iOS does not honour it for free; the hit shake asks explicitly.                               |
 
-Navigation is a `switch` in `App.tsx`, not React Navigation. Seven screens, no
+Navigation is a `switch` in `App.tsx`, not React Navigation. Eight screens, no
 deep links, no back stack worth preserving — a navigation library would add two
 more native modules to the iOS build to replace ten lines.
 
@@ -68,16 +68,42 @@ shared engine included, to Hermes bytecode and fails on any bad import.
 ## Backend
 
 The game is fully playable with no network: the profile lives on the device,
-exactly as the web client behaves with no database attached.
+exactly as the web client behaves with no database attached. Signing in is an
+**upgrade, never a gate** — the device save is always what the game plays from,
+so a flat network or no account at all costs a child nothing. An account only
+mirrors that save so his album follows him to another device.
 
-`src/api.ts` is the seam to the same Next.js API the web client uses, and its
-contract is tested — but **nothing on this client signs in or syncs yet**. That
-is the next feature, not a missing piece of this one. The base URL is build-time
-configuration, never hardcoded:
+Sign-in is a trainer name and a four-digit PIN, the same accounts the web client
+uses, resolved by the same last-write-wins `reconcile` in the engine. The
+session is an httpOnly cookie; React Native's fetch uses the platform cookie
+store, so this client never sees or stores a credential itself.
+
+The base URL is build-time configuration, never hardcoded:
 
 ```bash
 EXPO_PUBLIC_API_URL=https://your-deployment.vercel.app npm run bundle
 ```
+
+### Testing against a real server
+
+`api.test.ts` stubs `fetch` and covers the bad-network cases. What a stub cannot
+cover is whether the requests this client sends are the ones the routes actually
+accept — a mock agrees with whatever it was written to expect, which is how a
+client and a server drift apart. `api.live.test.ts` therefore talks to a running
+server, and skips itself unless one is offered:
+
+```bash
+cd ..                                   # the repo root serves the API
+DATABASE_URL=postgres://... npm run build
+DATABASE_URL=postgres://... npm start
+
+cd mobile
+TEST_API_URL=http://127.0.0.1:3000 npm test
+```
+
+It earned its place immediately: the first draft used a 23-character trainer
+name and every request came back `invalid`, because the server allows 2-16. A
+mocked fetch would have accepted it happily.
 
 ## Building and signing
 
@@ -138,6 +164,8 @@ GitHub macOS runner, from a Release build with the JavaScript bundle embedded.
 The game is complete and playable on the device:
 
 - **Sign-up** — trainer name, then the twelve starters on their own screen.
+- **Accounts** — optional name + PIN sign-in from Settings, mirroring progress
+  to the same server the web client uses.
 - **Dashboard** — partner in its current evolved form, XP bar, maths level,
   day streak, album completion.
 - **Opponent choice** — three level-appropriate opponents, each labelled with
@@ -152,4 +180,6 @@ The game is complete and playable on the device:
   exported as pure functions and tested without a renderer, so the claim under
   test is "this changed one field of the save and nothing else".
 
-Not yet here: signing in and cross-device sync (see **Backend** above).
+Not yet here: Google sign-in (the web client offers it; this one is PIN only),
+and background refresh — the server is read on launch and on sign-in, not
+while the app is open.

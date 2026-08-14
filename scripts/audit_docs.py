@@ -644,12 +644,19 @@ def documented_scripts(doc: str, text: str) -> list[tuple[int, str, str]]:
     """(line, script, which package.json it should exist in) for every mention.
 
     Which package a mention belongs to is decided by context, deterministically:
-    everything in mobile/README.md is the mobile package; elsewhere, a `cd
-    mobile` earlier in the same fenced block, or a heading mentioning iOS or
-    mobile, switches the target. `CLAUDE.md` relies on both - its iOS block
-    lives under an "### iOS" heading and opens with `cd mobile`.
+    mobile/README.md defaults to the mobile package; elsewhere, a `cd mobile`
+    earlier in the same fenced block, or a heading mentioning iOS or mobile,
+    switches the target. `CLAUDE.md` relies on both - its iOS block lives under
+    an "### iOS" heading and opens with `cd mobile`.
+
+    `cd ..` switches back, and that is not symmetry for its own sake: the iOS
+    README documents starting the API server, which lives in the root package.
+    Without this the audit insisted `npm run build` be a mobile script, and the
+    only ways to satisfy it were to delete a true instruction or to invent a
+    script - a checker bullying a correct document is worse than no checker.
     """
     found: list[tuple[int, str, str]] = []
+    doc_default_is_mobile = doc == "mobile/README.md"
     heading_is_mobile = False
     in_fence = False
     fence_is_mobile = False
@@ -668,8 +675,13 @@ def documented_scripts(doc: str, text: str) -> list[tuple[int, str, str]]:
                 )
         if re.search(r"\bcd\s+mobile\b", line):
             fence_is_mobile = True
+        elif re.search(r"\bcd\s+\.\.(\s|$)", line):
+            # Back to the repository root for the rest of this block.
+            fence_is_mobile = False
+            heading_is_mobile = False
+            doc_default_is_mobile = False
 
-        mobile = doc == "mobile/README.md" or heading_is_mobile or fence_is_mobile
+        mobile = doc_default_is_mobile or heading_is_mobile or fence_is_mobile
         target = "mobile/package.json" if mobile else "package.json"
 
         for match in NPM_RUN.finditer(line):

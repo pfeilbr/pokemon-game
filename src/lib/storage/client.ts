@@ -1,4 +1,8 @@
-import { type Profile, normaliseProfile } from '@/lib/game/progress';
+import { type Profile, normaliseProfile, reconcile } from '@/lib/game/progress';
+
+// Re-exported so callers keep importing their persistence helpers from one
+// place, even though the conflict rule itself belongs to the engine.
+export { reconcile };
 
 /**
  * Client-side persistence.
@@ -101,18 +105,4 @@ export async function pushRemoteProfile(profile: Profile): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-/**
- * Picks the winner when local and remote profiles disagree.
- *
- * Last write wins on `updatedAt`. It is the right trade here: the alternative
- * is asking a seven-year-old to resolve a merge conflict, and the realistic
- * conflict - "played on the tablet, then on the laptop" - is exactly what
- * last-write-wins handles correctly.
- */
-export function reconcile(local: Profile | null, remote: Profile | null): Profile | null {
-  if (!local) return remote;
-  if (!remote) return local;
-  return Date.parse(remote.updatedAt) > Date.parse(local.updatedAt) ? remote : local;
 }

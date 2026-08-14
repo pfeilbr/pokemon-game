@@ -9,13 +9,14 @@ import { Home } from './src/screens/Home';
 import { Onboarding } from './src/screens/Onboarding';
 import { PickOpponent } from './src/screens/PickOpponent';
 import { ProgressScreen } from './src/screens/ProgressScreen';
+import { SignIn } from './src/screens/SignIn';
 import { Settings } from './src/screens/Settings';
 import { colors } from './src/theme';
 
 /**
  * The app root and its router.
  *
- * A hand-rolled screen switch rather than React Navigation. There are seven
+ * A hand-rolled screen switch rather than React Navigation. There are eight
  * screens, no deep links, no tabs, and no back stack worth preserving - the
  * game's own "back" buttons are the navigation. A navigation library would add
  * two more native modules and a prebuild surface to the iOS build for a `switch`
@@ -28,7 +29,8 @@ type Screen =
   | { name: 'battle'; opponentId: string }
   | { name: 'album' }
   | { name: 'progress' }
-  | { name: 'settings' };
+  | { name: 'settings' }
+  | { name: 'signin' };
 
 function Router() {
   const { profile, loading } = useGame();
@@ -76,7 +78,12 @@ function Router() {
       return <ProgressScreen profile={profile} onBack={home} />;
 
     case 'settings':
-      return <Settings profile={profile} onBack={home} />;
+      return (
+        <Settings profile={profile} onBack={home} onSignIn={() => setScreen({ name: 'signin' })} />
+      );
+
+    case 'signin':
+      return <SignIn onDone={() => setScreen({ name: 'settings' })} />;
 
     default:
       return (

@@ -79,6 +79,7 @@ export {
   normaliseProfile,
   overallAccuracy,
   partnerFor,
+  reconcile,
 } from '../../src/lib/game/progress';
 
 export { createRng } from '../../src/lib/game/rng';

@@ -591,6 +591,25 @@ export function normaliseProfile(input: unknown): Profile | null {
   };
 }
 
+/**
+ * Picks the winner when a device's save and the server's disagree.
+ *
+ * Last write wins on `updatedAt`. It is the right trade here: the alternative
+ * is asking a seven-year-old to resolve a merge conflict, and the realistic
+ * conflict - "played on the tablet, then on the laptop" - is exactly what
+ * last-write-wins handles correctly.
+ *
+ * This lives in the engine rather than in either client's storage layer
+ * because it is a rule, and both clients have to answer it the same way. A
+ * phone and a browser that disagreed about which save is newer would lose a
+ * child's album between them.
+ */
+export function reconcile(local: Profile | null, remote: Profile | null): Profile | null {
+  if (!local) return remote;
+  if (!remote) return local;
+  return Date.parse(remote.updatedAt) > Date.parse(local.updatedAt) ? remote : local;
+}
+
 /** Overall answer accuracy, 0..1. */
 export function overallAccuracy(profile: Profile): number {
   return profile.problemsTotal === 0 ? 0 : profile.problemsCorrect / profile.problemsTotal;

@@ -1,6 +1,6 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Language, Profile } from '../engine';
-import { useGame } from '../game/GameContext';
+import { type SyncState, useGame } from '../game/GameContext';
 import { TAP, colors, radius, space } from '../theme';
 import { Button, Panel } from '../ui/kit';
 
@@ -26,6 +26,23 @@ function stamp(profile: Profile, now: string): string {
   return now > profile.updatedAt ? now : profile.updatedAt;
 }
 
+/**
+ * Where this child's progress is being kept, right now.
+ *
+ * One line, derived, rather than a fixed "saving on this device": once an
+ * account exists that sentence is simply untrue, and a parent checking whether
+ * sync is working is exactly who reads it.
+ */
+export function saveStatus(
+  signedIn: boolean,
+  syncState: SyncState,
+): 'savedLocally' | 'syncing' | 'savedToAccount' | 'somethingWentWrong' {
+  if (!signedIn) return 'savedLocally';
+  if (syncState === 'saving') return 'syncing';
+  if (syncState === 'error') return 'somethingWentWrong';
+  return 'savedToAccount';
+}
+
 export function withLanguage(profile: Profile, language: Language, now: string): Profile {
   return {
     ...profile,
@@ -42,8 +59,16 @@ export function toggleSound(profile: Profile, now: string): Profile {
   };
 }
 
-export function Settings({ profile, onBack }: { profile: Profile; onBack: () => void }) {
-  const { language, tr, update, feedback } = useGame();
+export function Settings({
+  profile,
+  onBack,
+  onSignIn,
+}: {
+  profile: Profile;
+  onBack: () => void;
+  onSignIn: () => void;
+}) {
+  const { language, tr, update, feedback, session, syncState, signOut } = useGame();
 
   // The time is read here, in the component, and passed into the transition -
   // the same split the engine uses.
@@ -114,7 +139,29 @@ export function Settings({ profile, onBack }: { profile: Profile; onBack: () => 
 
       <Panel>
         <Text style={styles.trainer}>{profile.trainerName}</Text>
-        <Text style={styles.note}>{tr('savedLocally')}</Text>
+        <Text style={styles.note}>{tr(saveStatus(session?.signedIn === true, syncState))}</Text>
+      </Panel>
+
+      <Panel>
+        <Text style={styles.sectionTitle}>{tr('signIn')}</Text>
+        {session?.signedIn ? (
+          <>
+            <Text style={styles.accountName}>
+              {tr('savedToAccount')}
+              {session.trainerName ? ` · ${session.trainerName}` : ''}
+            </Text>
+            <Button
+              testID="sign-out"
+              label={tr('signOut')}
+              variant="secondary"
+              onPress={() => void signOut()}
+            />
+          </>
+        ) : (
+          <>
+            <Button testID="go-signin" label={tr('signInToSave')} onPress={onSignIn} />
+          </>
+        )}
       </Panel>
 
       <Button label={`← ${tr('goHome')}`} variant="ghost" onPress={onBack} />
@@ -123,6 +170,9 @@ export function Settings({ profile, onBack }: { profile: Profile; onBack: () => 
 }
 
 const styles = StyleSheet.create({
+  sectionTitle: { color: colors.text, fontSize: 17, fontWeight: '800' },
+  accountName: { color: colors.text, fontSize: 15, fontWeight: '700' },
+  syncNote: { color: colors.muted, fontSize: 13 },
   content: { padding: space.lg, paddingTop: 24, gap: space.md, paddingBottom: space.xl },
   title: { color: colors.text, fontSize: 26, fontWeight: '900', textAlign: 'center' },
   rowLabel: { color: colors.text, fontSize: 17, fontWeight: '800' },
