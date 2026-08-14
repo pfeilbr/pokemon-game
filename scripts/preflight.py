@@ -339,7 +339,6 @@ class Step:
     name: str
     commands: list[str]
     env: dict[str, str]
-    raw_run: str | None
     uses: str | None
     condition: str | None
 
@@ -359,7 +358,7 @@ class Step:
         return "(no command)"
 
 
-def load_steps(path: str) -> tuple[list[Step], dict[str, str]]:
+def load_steps(path: str) -> list[Step]:
     with open(path, "r", encoding="utf-8") as handle:
         doc = parse_yaml(handle.read())
     if not isinstance(doc, dict) or "jobs" not in doc:
@@ -389,12 +388,11 @@ def load_steps(path: str) -> tuple[list[Step], dict[str, str]]:
                 name=str(raw.get("name") or raw.get("uses") or (commands[0] if commands else f"step {i}")),
                 commands=commands,
                 env={**job_env, **step_env},
-                raw_run=run if isinstance(run, str) else None,
                 uses=str(raw["uses"]) if raw.get("uses") else None,
                 condition=str(raw["if"]) if raw.get("if") else None,
             )
         )
-    return steps, job_env
+    return steps
 
 
 def database_reachable(url: str) -> bool:
@@ -506,6 +504,35 @@ def classify(steps: list[Step], opts: argparse.Namespace, db_url: str | None) ->
 # ==========================================================================
 
 
+GUARDED_SIGNALS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
+
+
+class deferred_signals:
+    """Ignore SIGINT/SIGTERM/SIGHUP for the length of a move.
+
+    An impatient second Ctrl-C, landing in the microseconds between "the
+    directory has left the tree" and "the directory is back", is exactly the
+    accident this whole script exists to make impossible.
+    """
+
+    def __enter__(self) -> "deferred_signals":
+        self.previous: dict[int, Any] = {}
+        for sig in GUARDED_SIGNALS:
+            try:
+                self.previous[sig] = signal.signal(sig, signal.SIG_IGN)
+            except (ValueError, OSError):
+                pass
+        return self
+
+    def __exit__(self, *_exc: Any) -> bool:
+        for sig, handler in self.previous.items():
+            try:
+                signal.signal(sig, handler)
+            except (ValueError, OSError):
+                pass
+        return False
+
+
 class Parking:
     """Moves mobile/node_modules out of the tree and guarantees its return.
 
@@ -535,11 +562,10 @@ class Parking:
         self.entries_before = len(os.listdir(self.source))
         self.holder = tempfile.mkdtemp(prefix=".mathmon-preflight-", dir=self._holder_root())
         target = os.path.join(self.holder, "node_modules")
-        try:
-            os.rename(self.source, target)
-        except OSError:
-            shutil.move(self.source, target)  # different filesystem
-        self.parked = target
+        # The breadcrumb is written *before* the move, not after: a kill in the
+        # window between them must leave a note that points somewhere, and a
+        # breadcrumb describing a move that never happened is harmless (recovery
+        # sees the source still in place and simply clears it).
         with open(BREADCRUMB, "w", encoding="utf-8") as handle:
             json.dump(
                 {
@@ -553,6 +579,12 @@ class Parking:
                 indent=2,
                 sort_keys=True,
             )
+        with deferred_signals():
+            try:
+                os.rename(self.source, target)
+            except OSError:
+                shutil.move(self.source, target)  # different filesystem
+            self.parked = target
 
     def restore(self) -> tuple[bool, str]:
         """Idempotent. Returns (ok, human-readable state)."""
@@ -572,11 +604,12 @@ class Parking:
                 f"{self.source} reappeared while parked - refusing to overwrite it. "
                 f"Your original is at {self.parked}"
             )
-        try:
-            os.rename(self.parked, self.source)
-        except OSError:
-            shutil.move(self.parked, self.source)
-        self.parked = None
+        with deferred_signals():
+            try:
+                os.rename(self.parked, self.source)
+            except OSError:
+                shutil.move(self.parked, self.source)
+            self.parked = None
         after = len(os.listdir(self.source))
         if self.entries_before is not None and after != self.entries_before:
             return False, f"restored but entry count changed: {self.entries_before} -> {after}"
@@ -628,17 +661,27 @@ def recover_breadcrumb(emit) -> int:
         return 2
 
     emit(f"  recovering an interrupted run (pid {pid}, dead)")
-    if os.path.lexists(source):
-        emit(f"  ! {source} already exists; leaving the parked copy at {parked}")
+    here = os.path.lexists(source)
+    there = os.path.lexists(parked)
+    if here and there:
+        emit(f"  ! {source} exists AND a parked copy sits at {parked}")
+        emit("    Refusing to choose between them. Delete whichever is wrong.")
         return 2
-    if not os.path.lexists(parked):
-        emit(f"  ! parked copy missing from {parked}; nothing to recover")
+    if here and not there:
+        # Killed between writing the breadcrumb and moving: nothing moved.
+        emit("  the tree was already intact (killed before the move); note cleared")
+        Parking._forget()
+        return 0
+    if not there:
+        emit(f"  ! mobile/node_modules is in neither place ({source}, {parked})")
+        emit("    Reinstall it with `cd mobile && npm ci`.")
         Parking._forget()
         return 2
-    try:
-        os.rename(parked, source)
-    except OSError:
-        shutil.move(parked, source)
+    with deferred_signals():
+        try:
+            os.rename(parked, source)
+        except OSError:
+            shutil.move(parked, source)
     if os.path.isdir(holder) and not os.listdir(holder):
         os.rmdir(holder)
     Parking._forget()
@@ -767,7 +810,7 @@ def main(argv: list[str]) -> int:
     # -- read the plan out of ci.yml -------------------------------------
     workflow_path = os.path.join(REPO_ROOT, WORKFLOW)
     try:
-        steps, job_env = load_steps(workflow_path)
+        steps = load_steps(workflow_path)
     except (YamlError, OSError) as exc:
         emit(f"  ! cannot read the workflow: {exc}")
         return 2
@@ -780,7 +823,10 @@ def main(argv: list[str]) -> int:
             db_url = None
 
     base_env = dict(os.environ)
-    adaptations: list[str] = []
+    # Forwarded tool output is the one thing here that cannot be deterministic;
+    # stripping colour at least makes it diffable.
+    base_env["NO_COLOR"] = "1"
+    adaptations: list[str] = ["NO_COLOR=1 (so a forwarded failure is diffable, not ANSI soup)"]
     if opts.ci_env:
         base_env["CI"] = "true"
         adaptations.append("CI=true (matches the runner: playwright forbids .only and retries once)")
@@ -810,6 +856,7 @@ def main(argv: list[str]) -> int:
             gaps.append("E2E: no PLAYWRIGHT_CHROMIUM_PATH found; Playwright will use its own browser.")
             gaps.sort()
 
+    adaptations.sort()
     emit(f"  database    {DB_ENV_VAR} {db_state}")
     emit("  environment " + (adaptations[0] if adaptations else "unmodified"))
     for extra in adaptations[1:]:
@@ -864,7 +911,8 @@ def main(argv: list[str]) -> int:
             emit(f"    ->   {parking.parked}")
             emit(f"  breadcrumb {BREADCRUMB} (so a SIGKILL is repairable)")
         emit("")
-        emit("RESULTS")
+        emit("RESULTS  (a failure does not stop the run - CI would abort there, but")
+        emit("          one local pass showing you every broken check is worth more)")
         for step in runnable:
             emit(f"  .. {step.name}")
             run_step(step, base_env, opts, log_dir)

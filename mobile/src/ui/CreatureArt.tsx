@@ -1,5 +1,5 @@
 import Svg, { Circle, Defs, Ellipse, G, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
-import { GRADIENT_REF, type Creature, type Shape, drawCreature } from '../engine';
+import { GRADIENT_REF, type Creature, type Language, type Shape, drawCreature } from '../engine';
 
 /**
  * The iOS renderer.
@@ -16,6 +16,12 @@ import { GRADIENT_REF, type Creature, type Shape, drawCreature } from '../engine
 
 type Props = {
   creature: Creature;
+  /**
+   * Which name VoiceOver announces. Required: this used to be
+   * `creature.name.en` unconditionally, so a child playing in Chinese heard
+   * the English name of every creature on screen.
+   */
+  language: Language;
   size?: number;
   /** Mirrors the creature to face left - used for the opponent. */
   facing?: 'left' | 'right';
@@ -86,7 +92,13 @@ function Primitive({ shape }: { shape: Shape }) {
   }
 }
 
-export function CreatureArt({ creature, size = 128, facing = 'right', silhouette = false }: Props) {
+export function CreatureArt({
+  creature,
+  language,
+  size = 128,
+  facing = 'right',
+  silhouette = false,
+}: Props) {
   const drawing = drawCreature(creature, { silhouette });
 
   return (
@@ -105,7 +117,7 @@ export function CreatureArt({ creature, size = 128, facing = 'right', silhouette
       // is used, and nothing caught it until the screen was rendered in a test.
       style={facing === 'left' ? { transform: [{ scaleX: -1 }] } : undefined}
       accessibilityRole="image"
-      accessibilityLabel={creature.name.en}
+      accessibilityLabel={creature.name[language]}
     >
       <Defs>
         {drawing.gradients.map((gradient) => (

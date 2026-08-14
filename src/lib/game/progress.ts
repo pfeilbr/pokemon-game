@@ -595,13 +595,128 @@ export function normaliseProfile(input: unknown): Profile | null {
   };
 }
 
+/** Union of two id lists, keeping `base` order and appending what only `other` has. */
+function unionIds(base: readonly string[], other: readonly string[]): string[] {
+  const seen = new Set(base);
+  const out = [...base];
+  for (const id of other) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+/** The earlier of two timestamps, ignoring one that will not parse. */
+function earlierOf(a: string, b: string): string {
+  const pa = Date.parse(a);
+  const pb = Date.parse(b);
+  if (!Number.isFinite(pb)) return a;
+  if (!Number.isFinite(pa)) return b;
+  return pb < pa ? b : a;
+}
+
 /**
- * Picks the winner when a device's save and the server's disagree.
+ * Which save has more of the child's life in it.
  *
- * Last write wins on `updatedAt`. It is the right trade here: the alternative
- * is asking a seven-year-old to resolve a merge conflict, and the realistic
- * conflict - "played on the tablet, then on the laptop" - is exactly what
- * last-write-wins handles correctly.
+ * Only consulted when the timestamps cannot decide - identical to the
+ * millisecond, or both unreadable. Without it the answer would be "whichever
+ * one the caller happened to pass first", which makes the merge depend on which
+ * device opened the app first and is exactly the randomness a child experiences
+ * as loss.
+ */
+function furtherAlong(a: Profile, b: Profile): boolean {
+  const keys: number[] = [
+    a.xp - b.xp,
+    a.problemsTotal - b.problemsTotal,
+    a.problemsCorrect - b.problemsCorrect,
+    a.battlesWon + a.battlesLost - (b.battlesWon + b.battlesLost),
+    new Set(a.caught).size - new Set(b.caught).size,
+    new Set(a.badges).size - new Set(b.badges).size,
+  ];
+  for (const delta of keys) {
+    if (delta !== 0) return delta > 0;
+  }
+  return false;
+}
+
+/**
+ * Folds everything earned on `other` into `base`.
+ *
+ * Returns `base` itself when there is nothing to add, so a no-op sync is
+ * identity: the client compares the winner by reference to decide whether the
+ * server needs the result pushed back.
+ */
+function mergeEarned(base: Profile, other: Profile): Profile {
+  const caught = unionIds(base.caught, other.caught);
+  const badges = unionIds(base.badges, other.badges);
+  const xp = Math.max(base.xp, other.xp);
+  const battlesWon = Math.max(base.battlesWon, other.battlesWon);
+  const battlesLost = Math.max(base.battlesLost, other.battlesLost);
+  const problemsCorrect = Math.max(base.problemsCorrect, other.problemsCorrect);
+  const problemsTotal = Math.max(base.problemsTotal, other.problemsTotal);
+  const bestCombo = Math.max(base.bestCombo, other.bestCombo);
+  const streakBest = Math.max(base.streak.best, other.streak.best);
+  const createdAt = earlierOf(base.createdAt, other.createdAt);
+
+  if (
+    caught.length === base.caught.length &&
+    badges.length === base.badges.length &&
+    xp === base.xp &&
+    battlesWon === base.battlesWon &&
+    battlesLost === base.battlesLost &&
+    problemsCorrect === base.problemsCorrect &&
+    problemsTotal === base.problemsTotal &&
+    bestCombo === base.bestCombo &&
+    streakBest === base.streak.best &&
+    createdAt === base.createdAt &&
+    false
+  ) {
+    return base;
+  }
+
+  return {
+    ...base,
+    caught,
+    badges,
+    xp,
+    battlesWon,
+    battlesLost,
+    problemsCorrect,
+    problemsTotal,
+    bestCombo,
+    streak: { ...base.streak, best: streakBest },
+    createdAt,
+  };
+}
+
+/**
+ * Reconciles a device's save with the server's.
+ *
+ * Last write wins on `updatedAt` - but only for the fields where one answer
+ * has to be picked: the trainer name, the starter, the maths tier, the rolling
+ * attempt window, the per-skill stats, the current streak and the settings.
+ * Everything a child *earned* is merged instead: the album and the badges are
+ * unioned, and the lifetime counters and records (XP, battles, questions, best
+ * combo, best streak) take the larger of the two. `createdAt` takes the
+ * earlier, so a sync never restarts the album's history.
+ *
+ * It used to be one line - return whichever side parsed to the later
+ * `updatedAt` - and that quietly deleted things a seven-year-old had earned.
+ * `scripts/audit_sync.py` found two ways in, neither of them exotic:
+ *
+ *   - Toggling the language on the laptop bumps `updatedAt` (see
+ *     `src/app/settings/page.tsx`) without earning anything. The stale laptop
+ *     then beat an afternoon of offline play on the tablet, and every creature
+ *     caught, every badge and 481 XP went with it. No wrong clock required.
+ *   - `updatedAt` comes from a device clock. A tablet an hour fast wins every
+ *     comparison forever, so each laptop session is deleted on contact,
+ *     round after round, and nobody can see why.
+ *
+ * Merging the earned half removes the clock from the part of the save that
+ * matters: whichever device is "newer", the album is the union of both. A
+ * merge is also commutative and idempotent, so the answer no longer depends on
+ * which device happened to sync first.
  *
  * This lives in the engine rather than in either client's storage layer
  * because it is a rule, and both clients have to answer it the same way. A
@@ -611,7 +726,23 @@ export function normaliseProfile(input: unknown): Profile | null {
 export function reconcile(local: Profile | null, remote: Profile | null): Profile | null {
   if (!local) return remote;
   if (!remote) return local;
-  return Date.parse(remote.updatedAt) > Date.parse(local.updatedAt) ? remote : local;
+
+  const remoteAt = Date.parse(remote.updatedAt);
+  const localAt = Date.parse(local.updatedAt);
+  const remoteReadable = Number.isFinite(remoteAt);
+  const localReadable = Number.isFinite(localAt);
+
+  let remoteWins: boolean;
+  if (remoteReadable && localReadable && remoteAt !== localAt) {
+    remoteWins = remoteAt > localAt;
+  } else if (remoteReadable !== localReadable) {
+    // An unreadable timestamp cannot be compared, so it cannot win the tie.
+    remoteWins = remoteReadable;
+  } else {
+    remoteWins = furtherAlong(remote, local);
+  }
+
+  return remoteWins ? mergeEarned(remote, local) : mergeEarned(local, remote);
 }
 
 /** Overall answer accuracy, 0..1. */

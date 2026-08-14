@@ -52,12 +52,14 @@ test.describe('offline', () => {
     await page.goto('/');
     await waitForController(page);
 
-    // Warm anything the worker might wrongly be willing to keep.
-    const online = await page.evaluate(async () => {
-      const res = await fetch('/api/session', { cache: 'no-store' });
-      return res.ok;
-    });
-    expect(online).toBe(true);
+    // Warm anything the worker might wrongly be willing to keep. Polled rather
+    // than asserted once: a hiccup while the server is still warming up is not
+    // this test's subject, and it must not be able to masquerade as one.
+    await expect
+      .poll(() =>
+        page.evaluate(async () => (await fetch('/api/session', { cache: 'no-store' })).ok),
+      )
+      .toBe(true);
 
     await context.setOffline(true);
     try {

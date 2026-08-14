@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { ELEMENT_STYLE, createProfile, starters } from '../engine';
+import { ELEMENT_STYLE, STRINGS, createProfile, starters } from '../engine';
 import { useGame } from '../game/GameContext';
 import { colors, radius, space, tint } from '../theme';
 import { CreatureArt } from '../ui/CreatureArt';
@@ -25,7 +25,7 @@ export function Onboarding() {
   if (step === 'name') {
     return (
       <ScrollView contentContainerStyle={styles.centered} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Mathmon Battle League</Text>
+        <Text style={styles.title}>{STRINGS.appName[language]}</Text>
         <Text style={styles.subtitle}>{tr('tagline')}</Text>
 
         <Text style={styles.question}>{tr('chooseName')}</Text>
@@ -82,7 +82,7 @@ export function Onboarding() {
                 chosen && { borderColor: style.color, borderWidth: 3 },
               ]}
             >
-              <CreatureArt creature={creature} size={92} />
+              <CreatureArt creature={creature} language={language} size={92} />
               <Text style={styles.starterName}>{creature.name[language]}</Text>
               <ElementChip element={creature.element} label={style.label[language]} />
             </Pressable>

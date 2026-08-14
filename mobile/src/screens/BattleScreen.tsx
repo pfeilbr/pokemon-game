@@ -150,7 +150,7 @@ export function BattleScreen({
             <HealthBar current={state.foe.hp} max={state.foe.maxHp} />
           </View>
           <Shake trigger={struck === 'foe' ? state.log.length : 0}>
-            <CreatureArt creature={foe} size={88} facing="left" />
+            <CreatureArt creature={foe} language={language} size={88} facing="left" />
           </Shake>
         </View>
         <MatchupHint attacker={player.element} defender={foe.element} />
@@ -179,7 +179,7 @@ export function BattleScreen({
       <Panel glow={ELEMENT_STYLE[player.element].color}>
         <View style={styles.fighterRow}>
           <Shake trigger={struck === 'player' ? state.log.length : 0}>
-            <CreatureArt creature={player} size={88} />
+            <CreatureArt creature={player} language={language} size={88} />
           </Shake>
           <View style={styles.fighterInfo}>
             <View style={styles.nameRow}>
@@ -448,7 +448,7 @@ function VictoryScreen({
 
       {summary.won && (
         <Panel style={styles.caughtPanel}>
-          <CreatureArt creature={foe} size={120} />
+          <CreatureArt creature={foe} language={language} size={120} />
           <Text style={[styles.caughtText, { color: summary.caught ? colors.good : colors.muted }]}>
             {summary.caught ? `✨ ${tr('gotIt')}` : tr('itEscaped')}
           </Text>

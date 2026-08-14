@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Pressable, type StyleProp, StyleSheet, Text, View, type ViewStyle } from 'react-native';
-import { ELEMENT_STYLE, type Element } from '../engine';
+import { ELEMENT_STYLE, type Element, type Language, t } from '../engine';
 import { TAP, colors, radius, space, tint } from '../theme';
 
 /**
@@ -92,13 +92,27 @@ export function HealthBar({ current, max }: { current: number; max: number }) {
   );
 }
 
-export function XpBar({ into, span, level }: { into: number; span: number; level: number }) {
+export function XpBar({
+  into,
+  span,
+  level,
+  language,
+}: {
+  into: number;
+  span: number;
+  level: number;
+  language: Language;
+}) {
   const ratio = span > 0 ? Math.max(0, Math.min(1, into / span)) : 1;
   return (
     <View>
       <View style={styles.barLabels}>
-        <Text style={styles.barLabel}>Lv {level}</Text>
-        <Text style={styles.barNumbers}>{span > 0 ? `${into}/${span}` : 'MAX'}</Text>
+        <Text style={styles.barLabel}>
+          {t('levelShort', language)} {level}
+        </Text>
+        <Text style={styles.barNumbers}>
+          {span > 0 ? `${into}/${span}` : t('maxLevelReached', language)}
+        </Text>
       </View>
       <View style={[styles.barTrack, { height: 10 }]}>
         <View style={[styles.barFill, { width: `${ratio * 100}%`, backgroundColor: colors.sky }]} />

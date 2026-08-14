@@ -362,6 +362,51 @@ def check_phrases(data: dict, i18n_source: str, report: Report) -> int:
 # --------------------------------------------------------------------------
 # Properties 3, 4 and 5: literals in the clients.
 # --------------------------------------------------------------------------
+def blank_comments(src: str) -> str:
+    """Replace every comment with spaces, keeping every offset and line intact.
+
+    Comments have to be invisible to these checks, and not for tidiness: the
+    fixes this audit prompted are *documented* in comments that quote the bug
+    ("it used to default to `style.label.en`"). CLAUDE.md asks specifically
+    that comments recording a caught bug are not deleted, so a checker that
+    fails on one would be telling contributors to erase the history that
+    explains it. Blanking rather than deleting keeps every reported line number
+    pointing at the real line.
+    """
+    out = list(src)
+    i = 0
+    n = len(src)
+    while i < n:
+        char = src[i]
+        if char in ("'", '"', "`"):
+            quote = char
+            i += 1
+            while i < n:
+                if src[i] == "\\":
+                    i += 2
+                    continue
+                if src[i] == quote:
+                    break
+                i += 1
+            i += 1
+            continue
+        if char == "/" and i + 1 < n and src[i + 1] == "/":
+            while i < n and src[i] != "\n":
+                out[i] = " "
+                i += 1
+            continue
+        if char == "/" and i + 1 < n and src[i + 1] == "*":
+            end = src.find("*/", i + 2)
+            end = n if end == -1 else end + 2
+            for j in range(i, end):
+                if out[j] != "\n":
+                    out[j] = " "
+            i = end
+            continue
+        i += 1
+    return "".join(out)
+
+
 def is_wordy(text: str) -> bool:
     """
     True when a literal contains translatable words.
@@ -767,7 +812,7 @@ def main() -> int:
     texts = attributes = inline = 0
     for client, path in targets:
         rel = str(path.relative_to(REPO))
-        src = path.read_text(encoding="utf-8")
+        src = blank_comments(path.read_text(encoding="utf-8"))
         found_texts, found_attrs = check_literals(rel, src, report)
         texts += found_texts
         attributes += found_attrs

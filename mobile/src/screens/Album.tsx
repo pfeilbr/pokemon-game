@@ -67,7 +67,12 @@ export function Album({ profile, onBack }: { profile: Profile; onBack: () => voi
 
       {detail && (
         <Panel glow={ELEMENT_STYLE[detail.element].color} style={styles.detail}>
-          <CreatureArt creature={detail} size={110} silhouette={!caught.has(detail.id)} />
+          <CreatureArt
+            creature={detail}
+            language={language}
+            size={110}
+            silhouette={!caught.has(detail.id)}
+          />
           <Text style={styles.detailName}>
             {caught.has(detail.id) ? detail.name[language] : '???'}
           </Text>
@@ -106,7 +111,7 @@ export function Album({ profile, onBack }: { profile: Profile; onBack: () => voi
                   key={creature.id}
                   testID={`album-${creature.id}`}
                   accessibilityRole="button"
-                  accessibilityLabel={owned ? creature.name.en : tr('notCaughtYet')}
+                  accessibilityLabel={owned ? creature.name[language] : tr('notCaughtYet')}
                   onPress={() => {
                     feedback('tap');
                     setSelected((current) => (current === creature.id ? null : creature.id));
@@ -118,7 +123,12 @@ export function Album({ profile, onBack }: { profile: Profile; onBack: () => voi
                     pressed && { opacity: 0.7 },
                   ]}
                 >
-                  <CreatureArt creature={creature} size={64} silhouette={!owned} />
+                  <CreatureArt
+                    creature={creature}
+                    language={language}
+                    size={64}
+                    silhouette={!owned}
+                  />
                   <Text
                     style={[styles.cellName, !owned && styles.cellNameLocked]}
                     numberOfLines={1}

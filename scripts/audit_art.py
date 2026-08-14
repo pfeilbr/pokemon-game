@@ -274,15 +274,34 @@ def flatten(shapes: list) -> list:
     return out
 
 
-def group_transforms(shapes: list) -> list:
-    """Every `transform` string on a group, so the scale can be read or removed."""
-    out = []
-    for shape in shapes:
-        if shape.get("kind") == "group":
-            if shape.get("transform"):
-                out.append(shape["transform"])
-            out.extend(group_transforms(shape.get("children", [])))
-    return out
+# The numbers each primitive cannot be drawn without. `JSON.stringify` turns a
+# NaN or an Infinity into `null`, so a geometry key arriving as anything other
+# than a real number is how a NaN reaches this script - and a NaN coordinate is
+# precisely the failure that makes a shape vanish without an error.
+REQUIRED_NUMBERS = {
+    "ellipse": ("cx", "cy", "rx", "ry"),
+    "circle": ("cx", "cy", "r"),
+    "rect": ("x", "y", "width", "height"),
+    "path": (),
+}
+
+# The ones that must be strictly positive, or the shape has no area.
+POSITIVE_NUMBERS = {
+    "ellipse": ("rx", "ry"),
+    "circle": ("r",),
+    "rect": ("width", "height"),
+    "path": (),
+}
+
+
+def number(shape: dict, key: str):
+    """The value at `key` if it is a real number, else None."""
+    value = shape.get(key)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if value != value or value in (float("inf"), float("-inf")):
+        return None
+    return float(value)
 
 
 def _round(value: float) -> float:
@@ -478,14 +497,23 @@ def check_drawable(creatures: list, violations: list) -> None:
             for index, shape in enumerate(leaves):
                 where = f"{label} shape #{index} ({shape.get('kind')})"
 
-                numbers = [
-                    (k, v)
-                    for k, v in sorted(shape.items())
-                    if isinstance(v, (int, float)) and not isinstance(v, bool)
-                ]
-                for key, value in numbers:
-                    if value != value or value in (float("inf"), float("-inf")):
-                        violations.append(("P2 drawable", f"{where}: {key} is {value}"))
+                kind = shape.get("kind")
+                if kind not in REQUIRED_NUMBERS:
+                    violations.append(("P2 drawable", f"{where}: unknown shape kind"))
+                    continue
+
+                bad_number = False
+                for key in REQUIRED_NUMBERS[kind]:
+                    if number(shape, key) is None:
+                        bad_number = True
+                        violations.append(
+                            (
+                                "P2 drawable",
+                                f"{where}: {key} is {shape.get(key)!r}, not a finite number "
+                                f"(a NaN or an Infinity arrives here as null, and renders as "
+                                f"nothing)",
+                            )
+                        )
 
                 for key in ("opacity", "fillOpacity"):
                     value = shape.get(key)
@@ -513,39 +541,39 @@ def check_drawable(creatures: list, violations: list) -> None:
                             f"and draws nothing",
                         )
                     )
-                if stroke not in (None, "none") and shape.get("strokeWidth", 0) <= 0:
+                width = number(shape, "strokeWidth")
+                if stroke not in (None, "none") and not (width is not None and width > 0):
                     violations.append(
-                        ("P2 drawable", f"{where}: stroke {stroke} with strokeWidth "
-                                        f"{shape.get('strokeWidth', 0)}")
+                        (
+                            "P2 drawable",
+                            f"{where}: stroke {stroke} with strokeWidth "
+                            f"{shape.get('strokeWidth')!r}, so the stroke has no width",
+                        )
                     )
 
-                coords: list = []
-                kind = shape.get("kind")
-                if kind == "ellipse":
-                    for key in ("rx", "ry"):
-                        if not shape.get(key, 0) > 0:
-                            violations.append(
-                                ("P2 drawable", f"{where}: {key}={shape.get(key)} is zero-area")
-                            )
-                    coords = [shape.get("cx", 0), shape.get("cy", 0)]
-                elif kind == "circle":
-                    if not shape.get("r", 0) > 0:
+                if bad_number:
+                    continue
+
+                for key in POSITIVE_NUMBERS[kind]:
+                    value = number(shape, key)
+                    if value is not None and value <= 0:
                         violations.append(
-                            ("P2 drawable", f"{where}: r={shape.get('r')} is zero-area")
+                            ("P2 drawable", f"{where}: {key}={value} is zero-area")
                         )
-                    coords = [shape.get("cx", 0), shape.get("cy", 0)]
+
+                coords: list = []
+                if kind in ("ellipse", "circle"):
+                    coords = [number(shape, "cx"), number(shape, "cy")]
                 elif kind == "rect":
-                    for key in ("width", "height"):
-                        if not shape.get(key, 0) > 0:
-                            violations.append(
-                                ("P2 drawable", f"{where}: {key}={shape.get(key)} is zero-area")
-                            )
-                    coords = [shape.get("x", 0), shape.get("y", 0)]
+                    coords = [number(shape, "x"), number(shape, "y")]
                 elif kind == "path":
                     d = shape.get("d", "")
                     if not isinstance(d, str) or not d.strip():
                         violations.append(("P2 drawable", f"{where}: empty path"))
                         continue
+                    # A NaN reaching a template literal survives as the *text*
+                    # "NaN", which browsers drop silently: the shape is simply
+                    # not there, and nothing is logged.
                     if re.search(r"NaN|undefined|null|Infinity", d):
                         violations.append(("P2 drawable", f"{where}: path contains {d!r}"))
                         continue
@@ -553,8 +581,6 @@ def check_drawable(creatures: list, violations: list) -> None:
                         # Only moveto and closepath: a path that goes nowhere.
                         violations.append(("P2 drawable", f"{where}: path draws no segment: {d!r}"))
                     coords = path_numbers(d)
-                else:
-                    violations.append(("P2 drawable", f"{where}: unknown shape kind"))
 
                 if coords and all(
                     c < -CANVAS_MARGIN or c > 100 + CANVAS_MARGIN for c in coords

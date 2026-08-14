@@ -9,7 +9,7 @@ import { STRINGS } from '@/lib/i18n';
 
 function LoginForm() {
   const router = useRouter();
-  const { session, language, tr, refreshSession, cue } = useGame();
+  const { session, tr, refreshSession, cue } = useGame();
   const [mode, setMode] = useState<'login' | 'register'>('register');
   const [name, setName] = useState('');
   const [pin, setPin] = useState('');

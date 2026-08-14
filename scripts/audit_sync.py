@@ -124,6 +124,10 @@ PROVIDER_TSX = REPO_ROOT / "src" / "components" / "GameProvider.tsx"
 SEEDS = 8
 SYNC_ROUNDS = 8
 
+# Violations printed per property before the rest are counted. One broken merge
+# breaks every case, and a wall of identical lines hides the second failure.
+VIOLATIONS_SHOWN = 10
+
 # The engine functions that must stay pure for both clients to answer a merge
 # the same way. Checked by reading the source, not by running it: an impurity
 # that only fires on one branch would not show up in a sample of calls.
@@ -434,6 +438,18 @@ function syncLoop({ seed, skewMs, rounds }) {
     laptop = winner;
 
     history.push({ round: r + 1, tablet: facts(tablet), laptop: facts(laptop), server: facts(server) });
+  }
+
+  // Settling: each device opens the app once more and syncs, twice round, which
+  // is all it takes for a merge to converge. Asserting on a device mid-loop
+  // would assert the wrong thing - the tablet has legitimately not seen the
+  // laptop's last session yet, because it has not been opened since. What must
+  // be true is that opening it gets everything back.
+  for (let i = 0; i < 2; i++) {
+    tablet = reconcile(tablet, server);
+    server = normaliseProfile(tablet);
+    laptop = reconcile(laptop, server);
+    server = normaliseProfile(laptop);
   }
 
   return {
@@ -877,14 +893,14 @@ def main() -> int:
                 f"a-wrong-clock-loses-nothing: sync loop '{loop['name']}' ended with "
                 f"{line} after {loop['rounds']} rounds"
             )
-        # The loop must also converge: after the last sync every device and the
-        # server agree, or the next round starts from a fresh disagreement.
+        # And it must converge: once both devices have been opened again and
+        # synced, each of them holds everything either of them ever earned.
         for side in ("tablet", "laptop"):
             drift = losses(ever, loop["final"][side])
             for line in drift:
                 violations.append(
                     f"a-wrong-clock-loses-nothing: sync loop '{loop['name']}' left the "
-                    f"{side} with {line}"
+                    f"{side} with {line} even after settling"
                 )
 
     # ---- P4: the merged profile is storable -------------------------------
@@ -975,8 +991,18 @@ def main() -> int:
     print()
     if violations:
         print("FAIL")
+        # Grouped by property and capped: a broken merge produces the same
+        # violation a few hundred times, and burying the *other* broken property
+        # under it is how a red run gets misread as a single small problem.
+        by_property: dict[str, list[str]] = {}
         for line in sorted(set(violations)):
-            print(f"  {line}")
+            by_property.setdefault(line.split(":", 1)[0], []).append(line)
+        for name in sorted(by_property):
+            lines = by_property[name]
+            for line in lines[:VIOLATIONS_SHOWN]:
+                print(f"  {line}")
+            if len(lines) > VIOLATIONS_SHOWN:
+                print(f"  ... and {len(lines) - VIOLATIONS_SHOWN} more {name} violations")
         return 1
 
     print("OK: the merge keeps every creature, badge, record and counter from both")

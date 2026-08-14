@@ -360,11 +360,6 @@ function crown(spec: ArtSpec): Shape[] {
 
     case 'antler':
       return [
-        { kind: 'path', d: 'M34 30 C30 20 32 12 38 8 C40 16 42 24 44 30 Z', ...fill },
-        { kind: 'path', d: 'M66 30 C70 20 68 12 62 8 C60 16 58 24 56 30 Z', ...fill },
-      ];
-    case 'antler-unreachable':
-      return [
         {
           kind: 'path',
           d: 'M40 28 C36 18 34 12 30 6 M36 16 L26 12 M38 22 L28 21',
@@ -628,8 +623,6 @@ function tail(spec: ArtSpec): Shape[] {
       ];
 
     case 'lash':
-      return [];
-    case 'lash-unreachable':
       return [
         {
           kind: 'path',

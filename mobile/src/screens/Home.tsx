@@ -1,6 +1,7 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   ELEMENT_STYLE,
+  STRINGS,
   type Profile,
   completion,
   getCreature,
@@ -50,13 +51,13 @@ export function Home({
         <Text style={styles.hello}>
           {tr('hello')}, {profile.trainerName}
         </Text>
-        <Text style={styles.app}>Mathmon Battle League</Text>
+        <Text style={styles.app}>{STRINGS.appName[language]}</Text>
       </View>
 
       <Panel glow={style.color}>
         <Text style={styles.cardLabel}>{tr('partner')}</Text>
         <View style={styles.partnerRow}>
-          <CreatureArt creature={partner} size={104} />
+          <CreatureArt creature={partner} language={language} size={104} />
           <View style={styles.partnerInfo}>
             <Text style={styles.partnerName}>{partner.name[language]}</Text>
             <ElementChip element={partner.element} label={style.label[language]} />
@@ -65,7 +66,12 @@ export function Home({
             </Text>
           </View>
         </View>
-        <XpBar into={progress.into} span={progress.span} level={progress.level} />
+        <XpBar
+          into={progress.into}
+          span={progress.span}
+          level={progress.level}
+          language={language}
+        />
       </Panel>
 
       <Panel>

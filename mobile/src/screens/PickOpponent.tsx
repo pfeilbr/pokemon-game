@@ -61,7 +61,7 @@ export function PickOpponent({
 
       <Panel style={styles.youRow}>
         <Text style={styles.youLabel}>{tr('yourType')}</Text>
-        <CreatureArt creature={partner} size={48} />
+        <CreatureArt creature={partner} language={language} size={48} />
         <Text style={styles.youName}>{partner.name[language]}</Text>
         <ElementChip
           element={partner.element}
@@ -98,7 +98,7 @@ export function PickOpponent({
               pressed && { opacity: 0.8 },
             ]}
           >
-            <CreatureArt creature={foe} size={88} />
+            <CreatureArt creature={foe} language={language} size={88} />
             <View style={styles.foeInfo}>
               <Text style={styles.foeName}>{foe.name[language]}</Text>
               <ElementChip element={foe.element} label={style.label[language]} />
