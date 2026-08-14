@@ -72,11 +72,11 @@ export default function ProgressPage() {
                   </span>
                   <span className="min-w-0">
                     <span
-                      className={`block text-sm leading-tight font-extrabold ${has ? 'text-white' : 'text-slate-500'}`}
+                      className={`block text-sm leading-tight font-extrabold ${has ? 'text-white' : 'text-slate-400'}`}
                     >
                       {has ? badge.name[language] : tr('locked')}
                     </span>
-                    <span className="block text-xs leading-tight text-slate-500">
+                    <span className="block text-xs leading-tight text-slate-400">
                       {badge.description[language]}
                     </span>
                   </span>
@@ -88,12 +88,12 @@ export default function ProgressPage() {
 
         <Panel>
           <h2 className="mb-1 text-lg font-bold text-white">{tr('mathsBreakdown')}</h2>
-          <p className="mb-3 text-xs text-slate-500">
+          <p className="mb-3 text-xs text-slate-400">
             {tr('questionsAnswered')}: {profile.problemsTotal}
           </p>
 
           {practised.length === 0 ? (
-            <p className="py-6 text-center text-slate-500">{tr('noDataYet')}</p>
+            <p className="py-6 text-center text-slate-400">{tr('noDataYet')}</p>
           ) : (
             <div className="flex flex-col gap-2.5">
               {practised.map((skill) => {

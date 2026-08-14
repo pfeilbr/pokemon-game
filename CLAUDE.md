@@ -42,7 +42,7 @@ npm run preflight
 ```
 
 That is `scripts/preflight.py`, and it exists because the recipe it replaces was
-a procedure you had to *remember* — which is not a guard. It reads the check
+a procedure you had to _remember_ — which is not a guard. It reads the check
 list out of `.github/workflows/ci.yml` rather than hardcoding one that would
 drift, parks `mobile/node_modules` outside the repo (a `.bak` alongside it would
 trip `audit_assets.py`, which rightly objects to an untracked, un-ignored
@@ -57,7 +57,7 @@ while `npm run preflight` exits 1 with CI's actual
 `Could not resolve "@react-native-async-storage/async-storage"`.
 
 Restoration is belt-and-braces — `try/finally`, signal handlers, `atexit`, and a
-breadcrumb written *before* the move so even a SIGKILL is repairable by the next
+breadcrumb written _before_ the move so even a SIGKILL is repairable by the next
 run or `npm run preflight -- --restore`. A crash that left your
 `mobile/node_modules` parked would be worse than the bug it prevents.
 
@@ -231,8 +231,19 @@ The app is **offline-first**, and this is deliberate:
   account, no network, and **no environment variables at all** — which is why a
   zero-config Vercel import works on the first click.
 - Signing in is an _upgrade_. It mirrors the same profile to Postgres so it
-  follows the player to another device. Conflicts resolve last-write-wins on
-  `updatedAt`.
+  follows the player to another device. **Conflicts merge what was earned** —
+  album, badges, records and lifetime counters — and resolve last-write-wins on
+  `updatedAt` only for mutable state (name, tier, settings, the attempt window).
+
+  It used to be last-write-wins for everything, and that quietly cost a child
+  his afternoon. It did not even need a wrong clock: toggling the language on
+  the laptop bumps `updatedAt` without earning anything, so a tablet carrying an
+  afternoon of catching and winning lost to a laptop that had barely started.
+  126 of 216 seeded divergences were lossy, and a device with a fast clock won
+  every comparison forever. `scripts/audit_sync.py` found it and now guards it, along
+  with commutativity — the old rule gave a different answer depending on which
+  device happened to sync first.
+
 - `accountsAvailable()` gates the whole account UI. With no database, the app
   says so plainly instead of erroring.
 

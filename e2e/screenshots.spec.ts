@@ -19,8 +19,33 @@ import { answerCurrentProblem, createTrainer, playBattleToEnd, solve } from './h
 const OUT = 'docs/screenshots';
 mkdirSync(OUT, { recursive: true });
 
-const shot = (page: Page, name: string) =>
-  page.screenshot({ path: `${OUT}/${name}.png`, animations: 'disabled' });
+/**
+ * The minimum number of characters of visible text a real screen of this app
+ * has in its `<main>`. The sparsest is /login with accounts disabled, at 96.
+ */
+const MIN_RENDERED_TEXT = 40;
+
+/**
+ * Captures one screenshot, refusing to capture a page that has not painted.
+ *
+ * `page.screenshot()` is happy to photograph an empty shell, and on the run
+ * that added this guard it did exactly that: Playwright's `reuseExistingServer`
+ * quietly attached to a `next dev` server another process had left on the port,
+ * and seven captures came back as the header over an empty `<main>`. Four of
+ * the tests writing them reported PASS, because a test that only navigates and
+ * screenshots asserts nothing at all. Two of those files were committed.
+ *
+ * So every capture now has to prove the screen rendered first. The audit script
+ * is the second net, not the only one.
+ */
+const shot = async (page: Page, name: string) => {
+  await expect
+    .poll(async () => (await page.locator('main').first().innerText()).trim().length, {
+      message: `${name}: <main> never rendered - refusing to photograph a blank page`,
+    })
+    .toBeGreaterThan(MIN_RENDERED_TEXT);
+  await page.screenshot({ path: `${OUT}/${name}.png`, animations: 'disabled' });
+};
 
 /** A profile part-way through the game, so the album and badges have content. */
 const PLAYED_PROFILE = {

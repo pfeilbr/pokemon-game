@@ -23,7 +23,15 @@ export function TypeChart({ language, highlight }: { language: Language; highlig
             className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl px-3 py-2 transition-opacity ${
               dim ? 'opacity-40' : ''
             }`}
-            style={{ background: `${style.color}14`, border: `1px solid ${style.color}33` }}
+            // Opaque, for the same reason the element chip is: a translucent
+            // tint of the element colour takes its lightness from whatever is
+            // behind the chart, and the row's own label is written in that
+            // very colour. Mixed towards the page ink it is 5.3:1 at worst
+            // (Stone) instead of 3.7:1.
+            style={{
+              background: `color-mix(in srgb, ${style.color} 10%, var(--color-ink))`,
+              border: `1px solid ${style.color}44`,
+            }}
           >
             <span
               className="flex w-24 shrink-0 items-center gap-1.5 font-extrabold"

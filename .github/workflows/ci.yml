@@ -122,6 +122,13 @@ jobs:
       - name: Battle replay audit (deterministic, resumable, JSON-total)
         run: python3 scripts/audit_replay.py
 
+      # Last-write-wins used to discard the loser whole, and it did not take a
+      # broken clock to lose an album - toggling the language on the laptop
+      # bumped `updatedAt` without earning anything, so the tablet's afternoon
+      # lost to a settings switch. 126 of 216 seeded divergences were lossy.
+      - name: Sync audit (a merge never costs a child what he earned)
+        run: python3 scripts/audit_sync.py
+
       - name: Typecheck
         run: npm run typecheck
 

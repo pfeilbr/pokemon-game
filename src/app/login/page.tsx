@@ -76,7 +76,7 @@ function LoginForm() {
               <span aria-hidden>🔵</span> {tr('continueWithGoogle')}
             </Button>
           </a>
-          <p className="text-center text-sm text-slate-500">{tr('orUsePin')}</p>
+          <p className="text-center text-sm text-slate-400">{tr('orUsePin')}</p>
         </>
       )}
 
@@ -90,7 +90,7 @@ function LoginForm() {
           onChange={(e) => setName(e.target.value.slice(0, 16))}
           placeholder={tr('namePlaceholder')}
           autoComplete="username"
-          className="rounded-2xl bg-slate-950/70 px-5 py-4 text-xl font-bold text-white ring-2 ring-white/15 outline-none placeholder:text-slate-600 focus:ring-amber-300"
+          className="rounded-2xl bg-slate-950/70 px-5 py-4 text-xl font-bold text-white ring-2 ring-white/15 outline-none placeholder:text-slate-400 focus:ring-amber-300"
         />
 
         <label htmlFor="login-pin" className="mt-1 text-sm font-bold text-slate-300">
@@ -104,9 +104,9 @@ function LoginForm() {
           inputMode="numeric"
           autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
           placeholder="••••"
-          className="rounded-2xl bg-slate-950/70 px-5 py-4 text-center font-mono text-3xl tracking-[0.5em] text-white ring-2 ring-white/15 outline-none placeholder:text-slate-700 focus:ring-amber-300"
+          className="rounded-2xl bg-slate-950/70 px-5 py-4 text-center font-mono text-3xl tracking-[0.5em] text-white ring-2 ring-white/15 outline-none placeholder:text-slate-400 focus:ring-amber-300"
         />
-        <p className="text-xs text-slate-500">{tr('pinHint')}</p>
+        <p className="text-xs text-slate-400">{tr('pinHint')}</p>
 
         {error && (
           <p className="font-semibold text-rose-400" role="alert" data-testid="login-error">
@@ -130,7 +130,7 @@ function LoginForm() {
         </button>
       </Panel>
 
-      <Link href="/" className="text-center text-sm text-slate-500 underline">
+      <Link href="/" className="text-center text-sm text-slate-400 underline">
         {tr('playWithoutAccount')}
       </Link>
     </div>

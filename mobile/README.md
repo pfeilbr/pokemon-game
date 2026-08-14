@@ -74,7 +74,10 @@ so a flat network or no account at all costs a child nothing. An account only
 mirrors that save so his album follows him to another device.
 
 Sign-in is a trainer name and a four-digit PIN, the same accounts the web client
-uses, resolved by the same last-write-wins `reconcile` in the engine. The
+uses, resolved by the same `reconcile` in the engine — which merges what was
+earned (album, badges, records, lifetime counters) and only falls back to
+last-write-wins on `updatedAt` for mutable state, so playing offline on the
+phone can never cost him what he caught on the laptop. The
 session is an httpOnly cookie; React Native's fetch uses the platform cookie
 store, so this client never sees or stores a credential itself.
 

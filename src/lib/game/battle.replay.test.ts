@@ -209,15 +209,12 @@ describe('a battle survives being saved mid-fight', () => {
     },
   );
 
-  it.each(CASES)(
-    'never holds a value JSON cannot carry unchanged: $name',
-    ({ setup, style }) => {
-      const { trace } = record(setup, style);
-      for (const state of trace) {
-        expect(unserialisable(state)).toEqual([]);
-      }
-    },
-  );
+  it.each(CASES)('never holds a value JSON cannot carry unchanged: $name', ({ setup, style }) => {
+    const { trace } = record(setup, style);
+    for (const state of trace) {
+      expect(unserialisable(state)).toEqual([]);
+    }
+  });
 });
 
 describe('the round-trip check itself catches a bad value', () => {

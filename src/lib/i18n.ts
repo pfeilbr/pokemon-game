@@ -55,6 +55,8 @@ export const STRINGS = {
   submit: { en: 'Go!', zh: '确定！' },
   clear: { en: 'Clear', zh: '清除' },
   backspace: { en: 'Backspace', zh: '退格' },
+  /** Shown under the keypad only on a device that has a real keyboard. */
+  keyboardHint: { en: 'Or type it and press Enter', zh: '也可以直接打字，按回车确定' },
   correct: { en: 'Correct!', zh: '答对了！' },
   speedBonus: { en: 'Speed bonus', zh: '速度加成' },
   takeYourTime: { en: 'Take your time', zh: '慢慢来' },

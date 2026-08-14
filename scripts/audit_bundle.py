@@ -192,33 +192,44 @@ class Budget:
 BUDGETS: tuple[Budget, ...] = (
     Budget(
         key="route-first-load-js",
-        limit=180_000,
-        measured=166_552,
+        limit=194_000,
+        measured=180_626,
         unit="gzip",
         what="heaviest route's first-load JavaScript, gzipped",
         why=(
-            "The number that decides whether the game starts. 13,448 bytes of "
+            "The number that decides whether the game starts. 13,374 bytes of "
             "headroom: under every library listed above, over any single "
-            "screen's worth of app code."
+            "screen's worth of app code. Raised once, deliberately, when the "
+            "service worker registrar, the error boundaries, keyboard input "
+            "and the chess strand all landed together - real features, not a "
+            "stray import, and the chunk table named each of them. The "
+            "headroom was held at its original width rather than widened, "
+            "which is the point: a ceiling that grows by more than it has to "
+            "stops catching anything."
         ),
     ),
     Budget(
         key="shared-baseline-js",
-        limit=160_000,
-        measured=147_614,
+        limit=175_000,
+        measured=161_487,
         unit="gzip",
         what="chunks every navigable route loads, gzipped",
         why=(
             "React and the Next.js client runtime. This is the floor under "
             "every page, so growth here is paid on every single visit rather "
-            "than by one screen. It should be near-constant; 12,386 bytes of "
-            "headroom covers a framework point release, not a new dependency."
+            "than by one screen. It should be near-constant; 13,513 bytes of "
+            "headroom covers a framework point release, not a new dependency. "
+            "It moved once because the error boundaries and the service "
+            "worker registrar are mounted in the root layout, so they are "
+            "genuinely on every page - which is exactly what this budget is "
+            "for measuring, and worth it to stop a crash showing a child a "
+            "blank screen."
         ),
     ),
     Budget(
         key="route-cold-transfer",
-        limit=192_000,
-        measured=177_976,
+        limit=206_000,
+        measured=192_170,
         unit="gzip",
         what="heaviest route's whole cold visit (HTML + CSS + JS + icon), gzipped",
         why=(

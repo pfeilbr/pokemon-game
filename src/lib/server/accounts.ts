@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
+import { type Profile, normaliseProfile, reconcile } from '../game/progress';
 import { type TrainerRow, db } from './db';
 
 /**
@@ -169,6 +170,24 @@ export async function loadProfile(trainerId: string): Promise<unknown | null> {
     select profile from trainers where id = ${trainerId} limit 1
   `;
   return rows[0]?.profile ?? null;
+}
+
+/**
+ * Stores a profile by merging it into the one already there.
+ *
+ * A plain `saveProfile` replaces the row, and a signed-in tab left open since
+ * before the child played on his tablet will PUT a save that is missing
+ * everything he earned there. The clients merge on next open, so nothing is
+ * permanently lost - but the server should not need rescuing by the next device
+ * to wake up, and a second tab that never reopens would leave the loss standing.
+ *
+ * Uses the same `reconcile` both clients use, from the shared engine, so the
+ * server cannot drift into a third opinion about what a merge means. It merges
+ * what was earned and only falls back to last-write-wins for mutable state.
+ */
+export async function saveProfileMerged(trainerId: string, incoming: Profile): Promise<boolean> {
+  const stored = normaliseProfile(await loadProfile(trainerId));
+  return saveProfile(trainerId, reconcile(stored, incoming) ?? incoming);
 }
 
 export async function saveProfile(trainerId: string, profile: unknown): Promise<boolean> {

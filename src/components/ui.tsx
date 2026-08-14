@@ -19,8 +19,11 @@ const VARIANTS: Record<NonNullable<ButtonProps['variant']>, string> = {
   secondary:
     'bg-gradient-to-b from-slate-600 to-slate-700 text-white shadow-[0_6px_0_0_#1e293b] active:translate-y-[3px] active:shadow-[0_3px_0_0_#1e293b]',
   ghost: 'bg-white/5 text-slate-200 border border-white/15 hover:bg-white/10',
+  // rose-600 rather than rose-400 at the top of the gradient: white on
+  // rose-400 is 2.86:1, and this is the button that deletes a child's whole
+  // album. `scripts/audit_contrast.py` guards it.
   danger:
-    'bg-gradient-to-b from-rose-400 to-rose-600 text-white shadow-[0_6px_0_0_#9f1239] active:translate-y-[3px] active:shadow-[0_3px_0_0_#9f1239]',
+    'bg-gradient-to-b from-rose-600 to-rose-700 text-white shadow-[0_6px_0_0_#9f1239] active:translate-y-[3px] active:shadow-[0_3px_0_0_#9f1239]',
 };
 
 export function Button({
@@ -84,7 +87,15 @@ export function ElementChip({
         size === 'sm' ? 'px-2.5 py-1 text-xs' : 'px-3 py-1.5 text-sm',
       ].join(' ')}
       style={{
-        background: `${style.color}22`,
+        // Opaque, and mixed towards the page's own ink rather than left
+        // translucent. A translucent tint takes its lightness from whatever
+        // card it was dropped onto, and the label is written in the very
+        // colour doing the tinting - so the same chip measured 6.4:1 on a
+        // plain panel and 3.5:1 on an element-tinted opponent card, which is
+        // the reading a child gets in a sunlit car. Flat means the chip reads
+        // identically everywhere, and `scripts/audit_contrast.py` reads this
+        // percentage out of this line to prove all six elements clear 4.5:1.
+        background: `color-mix(in srgb, ${style.color} 12%, var(--color-ink))`,
         color: style.color,
         border: `1px solid ${style.color}66`,
       }}
@@ -119,7 +130,7 @@ export function HealthBar({
       {label && (
         <div className="mb-1 flex items-baseline justify-between gap-2">
           <span className="truncate text-sm font-bold text-slate-200">{label}</span>
-          <span className="shrink-0 font-mono text-xs text-slate-400" aria-hidden>
+          <span className="shrink-0 font-mono text-xs text-slate-300" aria-hidden>
             {Math.ceil(current)}/{max}
           </span>
         </div>
@@ -162,7 +173,7 @@ export function XpBar({
         <span>
           {t('levelShort', language)} {level}
         </span>
-        <span className="font-mono text-slate-400">
+        <span className="font-mono text-slate-300">
           {span > 0 ? `${into}/${span}` : t('maxLevelReached', language)}
         </span>
       </div>

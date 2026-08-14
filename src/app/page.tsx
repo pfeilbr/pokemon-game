@@ -83,7 +83,7 @@ export default function HomePage() {
                 level={progress.level}
                 language={language}
               />
-              <p className="mt-1.5 text-xs text-slate-400">
+              <p className="mt-1.5 text-xs text-slate-300">
                 {evolvesAt ? `${tr('evolvesAt')} ${evolvesAt}` : tr('finalForm')}
               </p>
             </div>

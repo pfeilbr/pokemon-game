@@ -1,5 +1,5 @@
 import { type Page, expect, test } from '@playwright/test';
-import { createTrainer, solve } from './helpers';
+import { solve } from './helpers';
 
 /**
  * Playing from a physical keyboard.
@@ -21,9 +21,30 @@ import { createTrainer, solve } from './helpers';
  * keypad has to keep its hands off them.
  */
 
+/**
+ * Onboarding, typed rather than filled.
+ *
+ * Deliberately not `createTrainer` from `helpers.ts`: that one uses `fill()`,
+ * which sets the value without ever pressing a key, and pressing keys is the
+ * entire subject here. Typing it also asserts the value landed before moving
+ * on, which `fill()` cannot promise on a page still hydrating.
+ */
+async function signUp(page: Page, name = 'Leo', starter = 'cindik'): Promise<void> {
+  await page.goto('/start');
+  const field = page.getByPlaceholder(/type your name/i);
+  await field.click();
+  await page.keyboard.type(name);
+  await expect(field).toHaveValue(name);
+
+  await page.getByRole('button', { name: /next/i }).click();
+  await page.getByTestId(`starter-${starter}`).click();
+  await page.getByTestId('begin-adventure').click();
+  await expect(page.getByText(name, { exact: false }).first()).toBeVisible();
+}
+
 /** Into a battle, with a question on screen and the keypad live. */
 async function startBattle(page: Page): Promise<void> {
-  await createTrainer(page);
+  await signUp(page);
   await page.getByTestId('tile-play').click();
   await page.locator('[data-testid^="opponent-"]').first().click();
   await expect(page.getByTestId('battle')).toBeVisible();
@@ -85,7 +106,9 @@ test.describe('physical keyboard', () => {
     await expect(page.getByTestId('answer-display')).toHaveText('?');
   });
 
-  test('Enter on a focused keypad key presses that key rather than submitting', async ({ page }) => {
+  test('Enter on a focused keypad key presses that key rather than submitting', async ({
+    page,
+  }) => {
     await startBattle(page);
 
     // A keyboard-only player tabs onto the "7" key. Enter is that button's own
@@ -121,7 +144,8 @@ test.describe('physical keyboard', () => {
 
   test('the trainer-name field still receives digits', async ({ page }) => {
     // Real screen, real field. Guards against the keypad listener ever being
-    // promoted to app scope, which would make this silently impossible.
+    // promoted to app scope, which would make this silently impossible - and
+    // digits are exactly the keystrokes the keypad wants for itself.
     await page.goto('/start');
     const field = page.getByPlaceholder(/type your name/i);
     await field.click();

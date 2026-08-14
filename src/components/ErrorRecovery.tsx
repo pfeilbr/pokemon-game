@@ -5,7 +5,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { Language } from '@/lib/game/progress';
 import { t } from '@/lib/i18n';
 import { languageFromSave, recoveryPlan } from '@/lib/recovery';
-import { STORAGE_KEY, clearLocal } from '@/lib/storage/client';
+import { STORAGE_KEY } from '@/lib/storage/key';
 import { Button } from './ui';
 
 /**
@@ -83,6 +83,24 @@ function clearRetries(): void {
     window.sessionStorage.removeItem(RETRY_KEY);
   } catch {
     // Same as above: nothing here is worth a second crash.
+  }
+}
+
+/**
+ * The one line of `clearLocal`, written out rather than imported.
+ *
+ * Importing it would drag `progress.ts` - and with it the roster, the art and
+ * the maths generators - into `app/error.tsx`, which Next bundles into every
+ * route. That cost 13.2 KiB gzipped on every cold visit and broke three of the
+ * budgets in `scripts/audit_bundle.py`. It also happens to be the right
+ * dependency for this screen to not have: this is the one button that must
+ * still work when the engine is what crashed.
+ */
+function eraseSave(): void {
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Blocked storage means there was nothing saved on this device to erase.
   }
 }
 
@@ -169,7 +187,7 @@ export function ErrorRecovery({ error, reset }: { error?: unknown; reset: () => 
                 full
                 data-testid="crash-erase-confirmed"
                 onClick={() => {
-                  clearLocal();
+                  eraseSave();
                   clearRetries();
                   // A full reload, not `reset()`: the point is to start from
                   // nothing, and in-memory state is part of the nothing.
@@ -185,7 +203,7 @@ export function ErrorRecovery({ error, reset }: { error?: unknown; reset: () => 
             type="button"
             data-testid="crash-still-stuck"
             onClick={() => setConfirmingErase(true)}
-            className="tap flex w-full items-center justify-center text-sm text-slate-500 underline"
+            className="tap flex w-full items-center justify-center text-sm text-slate-400 underline"
           >
             {t('stillStuck', language)}
           </button>

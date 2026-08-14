@@ -108,7 +108,9 @@ describe('readJsonBody', () => {
   });
 
   it('accepts the content type navigator.sendBeacon sends, with a charset', async () => {
-    const result = await readJsonBody(jsonRequest('{"profile":{}}', 'application/json; charset=utf-8'));
+    const result = await readJsonBody(
+      jsonRequest('{"profile":{}}', 'application/json; charset=utf-8'),
+    );
     expect(result.ok).toBe(true);
   });
 

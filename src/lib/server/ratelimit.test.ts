@@ -1,12 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it } from 'vitest';
-import {
-  AUTH_RULE,
-  PROFILE_RULE,
-  checkRateLimit,
-  clientKey,
-  resetRateLimits,
-} from './ratelimit';
+import { AUTH_RULE, PROFILE_RULE, checkRateLimit, clientKey, resetRateLimits } from './ratelimit';
 
 /**
  * The throttle that sits above the per-account lockout.

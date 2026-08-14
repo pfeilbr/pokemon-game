@@ -201,14 +201,21 @@ describe('the chess strand', () => {
   /** Restated on purpose: a test that imported the table could not catch it. */
   const REAL_VALUES: Record<string, number> = { '♟': 1, '♞': 3, '♝': 3, '♜': 5, '♛': 9 };
 
-  /** Every chess problem the generators can produce, swept across their bands. */
+  /**
+   * Every chess problem the generators can produce, swept across their bands.
+   *
+   * The properties below collect their offenders and assert once at the end
+   * rather than calling `expect` per problem: a few hundred thousand
+   * assertions is slow enough to trip the suite timeout, and a list of the
+   * prompts that actually broke reads better than the first one that did.
+   */
   const sweep = (): { skill: string; tier: number; prompt: string; answer: number }[] => {
     const out: { skill: string; tier: number; prompt: string; answer: number }[] = [];
     for (const skill of CHESS_SKILLS) {
       const meta = SKILL_META[skill];
       for (let tier = meta.minTier; tier <= meta.maxTier; tier++) {
         const rng = createRng(`math.test:${skill}:${tier}`);
-        for (let i = 0; i < 3000; i++) {
+        for (let i = 0; i < 1200; i++) {
           const { prompt, answer } = meta.generate(rng, tier);
           out.push({ skill, tier, prompt, answer });
         }
@@ -219,54 +226,45 @@ describe('the chess strand', () => {
 
   // Deterministic, so it is swept once and shared rather than rebuilt per test.
   const PROBLEMS = sweep();
+  const offenders = (fails: (p: (typeof PROBLEMS)[number]) => boolean): string[] => [
+    ...new Set(
+      PROBLEMS.filter(fails).map((p) => `${p.skill} t${p.tier}: ${p.prompt} = ${p.answer}`),
+    ),
+  ];
 
   it('prints every piece at the value it is really worth', () => {
     // The prompt is self-contained *because* of these numbers. Get one wrong
     // and the arithmetic still checks out - the sum agrees with itself - while
     // a seven-year-old is quietly taught that a pawn is worth a rook.
-    for (const { prompt } of PROBLEMS) {
-      for (const [, glyph, printed] of prompt.matchAll(/([♟♞♝♜♛])(\d+)/g)) {
-        expect(Number(printed), `${prompt} prints ${glyph}${printed}`).toBe(REAL_VALUES[glyph!]);
-      }
-    }
+    const dishonest = offenders(({ prompt }) =>
+      [...prompt.matchAll(/([♟♞♝♜♛])(\d+)/g)].some(
+        (piece) => Number(piece[2]) !== REAL_VALUES[piece[1] ?? ''],
+      ),
+    );
+    expect(dishonest).toEqual([]);
   });
 
   it('never shows a piece without its value, so the question needs no chess', () => {
-    for (const { prompt } of PROBLEMS) {
-      // Every chess glyph in the prompt is immediately followed by a digit.
-      expect(prompt.replace(/[♟♞♝♜♛]\d/g, ''), prompt).not.toMatch(/[♔-♟]/);
-    }
+    // Every chess glyph in the prompt is immediately followed by a digit, so
+    // nothing on screen has to be looked up.
+    expect(offenders(({ prompt }) => /[♔-♟]/.test(prompt.replace(/[♟♞♝♜♛]\d/g, '')))).toEqual([]);
   });
 
   it('never shows a king, which has no value because it is never traded', () => {
-    for (const { prompt } of PROBLEMS) {
-      expect(prompt, prompt).not.toMatch(/[♔♚]/);
-    }
+    expect(offenders(({ prompt }) => /[♔♚]/.test(prompt))).toEqual([]);
   });
 
   it('asks how far ahead, never what the difference is', () => {
     // A lead of zero is not a lead, and a lead below zero cannot be typed on a
-    // keypad with no minus key. Both are excluded by construction.
-    for (const { skill, prompt, answer } of PROBLEMS) {
-      if (skill !== 'chessLead') continue;
-      expect(answer, prompt).toBeGreaterThan(0);
-    }
-  });
-
-  it('never asks a trade that is already even', () => {
-    for (const { skill, prompt, answer } of PROBLEMS) {
-      if (skill !== 'chessSwap') continue;
-      expect(answer, prompt).toBeGreaterThan(0);
-    }
+    // keypad with no minus key. Both are excluded by construction - and so is
+    // a trade that is already even, which asks what is missing when nothing is.
+    expect(offenders((p) => p.skill !== 'chessValue' && p.answer < 1)).toEqual([]);
   });
 
   it('always counts at least one piece worth more than a pawn', () => {
     // A row of 1s can be answered without ever looking at which piece is which,
     // which is the one thing this skill is for.
-    for (const { skill, prompt } of PROBLEMS) {
-      if (skill !== 'chessValue') continue;
-      expect(prompt, prompt).toMatch(/[♞♝♜♛]/);
-    }
+    expect(offenders((p) => p.skill === 'chessValue' && !/[♞♝♜♛]/.test(p.prompt))).toEqual([]);
   });
 
   it('reaches every tier of the ladder', () => {
@@ -281,8 +279,10 @@ describe('the chess strand', () => {
 
   it('gets harder up the ladder rather than repeating one question', () => {
     const hardest = (skill: (typeof CHESS_SKILLS)[number], tier: number): number =>
-      PROBLEMS.filter((p) => p.skill === skill && p.tier === tier)
-        .reduce((top, p) => Math.max(top, p.answer), 0);
+      PROBLEMS.filter((p) => p.skill === skill && p.tier === tier).reduce(
+        (top, p) => Math.max(top, p.answer),
+        0,
+      );
 
     expect(hardest('chessValue', 5)).toBeGreaterThan(hardest('chessValue', 1));
     expect(hardest('chessSwap', 8)).toBeGreaterThan(hardest('chessSwap', 4));

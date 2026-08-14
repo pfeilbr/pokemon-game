@@ -1,4 +1,5 @@
 import { type Profile, normaliseProfile, reconcile } from '@/lib/game/progress';
+import { STORAGE_KEY } from './key';
 
 // Re-exported so callers keep importing their persistence helpers from one
 // place, even though the conflict rule itself belongs to the engine.
@@ -14,7 +15,10 @@ export { reconcile };
  * profile to the server so it follows him to another device.
  */
 
-export const STORAGE_KEY = 'mathmon.profile.v1';
+// Defined in `./key` and re-exported here, so every existing caller keeps its
+// import and the crash-recovery screen can read the key without importing the
+// engine. See the note in that file.
+export { STORAGE_KEY } from './key';
 
 function storage(): Storage | null {
   if (typeof window === 'undefined') return null;

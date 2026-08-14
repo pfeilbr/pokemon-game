@@ -216,7 +216,7 @@ export function Battle({ playerCreatureId, opponentId, onExit, onRematch }: Prop
               background: isCatch ? 'rgba(52,211,153,0.12)' : undefined,
             }}
           >
-            <span className="text-xs font-bold tracking-widest text-slate-400 uppercase">
+            <span className="text-xs font-bold tracking-widest text-slate-300 uppercase">
               {isCatch ? tr('catchPrompt') : tr('answer')}
             </span>
             <span
@@ -309,7 +309,7 @@ export function Battle({ playerCreatureId, opponentId, onExit, onRematch }: Prop
                 <span className="text-base leading-tight font-extrabold text-white">
                   {move.name[language]}
                 </span>
-                <span className="text-xs leading-tight text-slate-400">
+                <span className="text-xs leading-tight text-slate-300">
                   {move.description[language]}
                 </span>
                 {move.chargeCost > 0 && (
@@ -330,6 +330,7 @@ export function Battle({ playerCreatureId, opponentId, onExit, onRematch }: Prop
             submitLabel={isCatch ? tr('catchIt') : tr('submit')}
             clearLabel={tr('clear')}
             backspaceLabel={tr('backspace')}
+            keyboardHint={tr('keyboardHint')}
             onKeyPress={() => cue('tap')}
           />
         )}
@@ -350,7 +351,7 @@ export function Battle({ playerCreatureId, opponentId, onExit, onRematch }: Prop
         <button
           type="button"
           onClick={onExit}
-          className="tap flex w-full items-center justify-center text-sm text-slate-500 underline"
+          className="tap flex w-full items-center justify-center text-sm text-slate-400 underline"
         >
           {tr('back')}
         </button>
@@ -407,7 +408,7 @@ function SpeedMeter({ startedAt, parSeconds }: { startedAt: number; parSeconds: 
           </>
         ) : (
           // No penalty here, and the wording makes that explicit.
-          <span className="text-slate-500">{tr('takeYourTime')}</span>
+          <span className="text-slate-400">{tr('takeYourTime')}</span>
         )}
       </div>
       <div className="h-2 w-full overflow-hidden rounded-full bg-slate-900/80 ring-1 ring-white/10">

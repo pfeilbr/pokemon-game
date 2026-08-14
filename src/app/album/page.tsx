@@ -87,11 +87,11 @@ export default function AlbumPage() {
                         silhouette={!has}
                       />
                       <span
-                        className={`text-center text-xs leading-tight font-bold ${has ? 'text-white' : 'text-slate-600'}`}
+                        className={`text-center text-xs leading-tight font-bold ${has ? 'text-white' : 'text-slate-400'}`}
                       >
                         {has ? creature.name[language] : '???'}
                       </span>
-                      <span className="text-[10px] text-slate-500">
+                      <span className="text-[10px] text-slate-300">
                         {tr('stage')} {creature.stage}
                       </span>
                     </button>
@@ -122,7 +122,7 @@ export default function AlbumPage() {
               />
             </div>
             <p className="text-sm text-slate-300">{selected.flavor[language]}</p>
-            <p className="mt-3 font-mono text-xs text-slate-500">
+            <p className="mt-3 font-mono text-xs text-slate-400">
               {tr('health')} {selected.baseHp} · {tr('attack')} {selected.baseAtk} · {tr('stage')}{' '}
               {selected.stage}
             </p>

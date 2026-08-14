@@ -47,9 +47,7 @@ export function groupByElement(creatures: readonly Creature[] = CREATURES): Elem
   for (const element of ELEMENTS) {
     // Engine order inside a group, which keeps each evolution line reading
     // root-first on both clients.
-    const members = creaturesByElement(element).filter((creature) =>
-      included.has(creature.id),
-    );
+    const members = creaturesByElement(element).filter((creature) => included.has(creature.id));
     if (members.length > 0) groups.push({ element, creatures: members });
   }
 

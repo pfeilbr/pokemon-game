@@ -376,8 +376,7 @@ export const SKILL_META: Record<Skill, SkillMeta> = {
       // The queen and a guaranteed piece on each side arrive together at tier 9,
       // so the top of the ladder always asks for two sums and a comparison
       // rather than `(♞3) − (♟1)`, which is a subtraction wearing a chess hat.
-      const squads =
-        tier <= 8 ? CHESS_LIGHT_SQUADS : CHESS_SQUADS.filter((s) => s.length === 2);
+      const squads = tier <= 8 ? CHESS_LIGHT_SQUADS : CHESS_SQUADS.filter((s) => s.length === 2);
       // Richer side first, then a strictly cheaper one from what is left below
       // it. Both filters are non-empty: the cheapest squad is worth 1 (a lone
       // pawn) or 2 (two of them), so there is always something worth more, and

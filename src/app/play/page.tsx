@@ -116,7 +116,7 @@ export default function PlayPage() {
                   <span aria-hidden>{verdict.icon} </span>
                   {verdict.text}
                 </span>
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-slate-300">
                   {attacking === SUPER_EFFECTIVE && `⚔️ ×2  `}
                   {attacking < NEUTRAL && `⚔️ ×0.5  `}
                   {defending === SUPER_EFFECTIVE && `🛡️ ×2`}

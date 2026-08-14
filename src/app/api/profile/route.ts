@@ -1,5 +1,5 @@
 import { normaliseProfile } from '@/lib/game/progress';
-import { loadProfile, saveProfile } from '@/lib/server/accounts';
+import { loadProfile, saveProfileMerged } from '@/lib/server/accounts';
 import { jsonError, jsonOk, readJsonBody, route } from '@/lib/server/http';
 import { PROFILE_RULE, checkRateLimit } from '@/lib/server/ratelimit';
 import { readSession } from '@/lib/server/session';
@@ -42,7 +42,11 @@ const put = route('PUT /api/profile', async (request: Request) => {
   const profile = normaliseProfile((body.value as { profile?: unknown })?.profile);
   if (!profile) return jsonError('invalid', 400);
 
-  const saved = await saveProfile(session.trainerId, profile);
+  // Merged, not overwritten. A tab left signed in since before the child played
+  // on his tablet holds a save that never saw those creatures, and a plain
+  // overwrite would drop them. The other device repairs it on next open, but a
+  // tab that never reopens would leave the loss standing.
+  const saved = await saveProfileMerged(session.trainerId, profile);
   if (!saved) return jsonError('unavailable', 503);
 
   return jsonOk({ ok: true });

@@ -144,7 +144,7 @@ export default function SettingsPage() {
             <button
               type="button"
               onClick={() => setConfirmingReset(true)}
-              className="tap flex w-full items-center justify-center text-sm text-slate-500 underline"
+              className="tap flex w-full items-center justify-center text-sm text-slate-400 underline"
             >
               {tr('startOver')}
             </button>

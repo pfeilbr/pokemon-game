@@ -1,6 +1,6 @@
 import { type Page, expect, test } from '@playwright/test';
 import { STRINGS } from '../src/lib/i18n';
-import { STORAGE_KEY } from '../src/lib/storage/client';
+import { STORAGE_KEY } from '../src/lib/storage/key';
 import { createTrainer } from './helpers';
 
 /**
