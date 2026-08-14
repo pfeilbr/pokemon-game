@@ -40,9 +40,18 @@ is imported from the engine, never restated, so a rebalance moves this report
 instead of breaking it.
 
 Note the prompts use the Unicode minus (U+2212) and times (U+00D7) glyphs, not
-ASCII hyphen and `x`, plus `÷` and the vulgar fractions `½ ⅓ ¼`. The parser
-below matches those, and an unparsed prompt is a failure rather than a skip - a
-prompt shape nobody can evaluate is a prompt shape nobody is checking.
+ASCII hyphen and `x`, plus `÷`, the vulgar fractions `½ ⅓ ¼` and the black chess
+pieces `♟ ♞ ♝ ♜ ♛`. The parser below matches those, and an unparsed prompt is a
+failure rather than a skip - a prompt shape nobody can evaluate is a prompt shape
+nobody is checking.
+
+The chess prompts get one check the arithmetic cannot give them. They print each
+piece's value beside it (`♜5 + ♟1`), which is the whole reason they are
+arithmetic rather than trivia: the question is answerable from what is on the
+screen, with or without ever having seen a board. So the piece values are
+restated here, by hand, exactly as the arithmetic is - if the engine ever prints
+`♟5`, the sum still adds up, Python agrees with it, and the only thing that has
+happened is that a child has been quietly taught that a pawn is worth five.
 
 How it runs the engine
 ----------------------
@@ -323,6 +332,28 @@ TIMES = "×"
 DIVIDE = "÷"
 FRACTION_GLYPHS = {"½": 2, "⅓": 3, "¼": 4}
 
+# The piece values every chess camp teaches in its first week. Deliberately a
+# second copy rather than an import: this table is what makes the printed value
+# checkable at all (see the module docstring).
+#
+# The king is absent, and its absence is load-bearing. It is never traded, so it
+# has no point value, and a prompt that invented one would be teaching something
+# false about the game. A ♚ - or a white ♔, or any other piece glyph - therefore
+# fails to parse rather than being scored, which is reported as
+# prompt-is-parseable.
+CHESS_VALUES = {"♟": 1, "♞": 3, "♝": 3, "♜": 5, "♛": 9}
+CHESS_NAMES = {"♟": "pawn", "♞": "knight", "♝": "bishop", "♜": "rook", "♛": "queen"}
+CHESS_CLASS = "".join(CHESS_VALUES)
+
+# Anything in the Unicode chess block routes to the chess parser, not just the
+# five pieces above, so an unexpected glyph is reported as an unevaluable chess
+# prompt rather than as a mystery.
+RE_ANY_CHESS = re.compile(r"[♔-♟]")
+RE_CHESS_TERM = re.compile(rf"^([{CHESS_CLASS}])(\d+)$")
+RE_CHESS_PIECE = re.compile(rf"([{CHESS_CLASS}])(\d+)")
+RE_CHESS_SWAP = re.compile(r"^(.+) \+ \? = (.+)$")
+RE_CHESS_LEAD = re.compile(r"^\((.+)\) − \((.+)\)$")
+
 RE_FRACTION = re.compile(r"^([½⅓¼]) of (\d+)$")
 RE_TWO_STEP = re.compile(r"^\((\d+) × (\d+)\) \+ (\d+)$")
 RE_MISSING = re.compile(r"^(\d+) ([+×]) \? = (\d+)$")
@@ -330,16 +361,84 @@ RE_BINARY = re.compile(r"^(\d+) ([+−×÷]) (\d+)$")
 
 
 class Parsed:
-    """One prompt, evaluated from scratch. `value` is exact, never a float."""
+    """One prompt, evaluated from scratch. `value` is exact, never a float.
 
-    __slots__ = ("form", "op", "operands", "value", "note")
+    `sides` carries the structure of a prompt that has more than one group of
+    operands - the two armies of a chess prompt - because `operands` is flat and
+    a flat list cannot say which pieces were on which side. Everything else
+    leaves it empty.
+    """
 
-    def __init__(self, form: str, op: str, operands: list[int], value, note: str = ""):
+    __slots__ = ("form", "op", "operands", "value", "note", "sides")
+
+    def __init__(
+        self,
+        form: str,
+        op: str,
+        operands: list[int],
+        value,
+        note: str = "",
+        sides: list[list[int]] | None = None,
+    ):
         self.form = form
         self.op = op
         self.operands = operands
         self.value = value
         self.note = note
+        self.sides = sides or []
+
+
+def chess_squad(text: str) -> list[int] | None:
+    """The values printed on one side of a chess prompt, or None if it is not one.
+
+    Only the *printed* numbers are read. What a piece is really worth is checked
+    separately, so that a dishonest value cannot hide inside arithmetic that
+    happens to add up.
+    """
+    values: list[int] = []
+    for term in text.split(" + "):
+        m = RE_CHESS_TERM.match(term)
+        if m is None:
+            return None
+        values.append(int(m.group(2)))
+    return values
+
+
+def evaluate_chess(prompt: str) -> Parsed | None:
+    """Re-derives a chess prompt's answer from the values printed on the screen."""
+    m = RE_CHESS_LEAD.match(prompt)
+    if m:
+        ahead = chess_squad(m.group(1))
+        behind = chess_squad(m.group(2))
+        if ahead is None or behind is None:
+            return None
+        return Parsed(
+            "chessLead",
+            MINUS,
+            ahead + behind,
+            Fraction(sum(ahead) - sum(behind)),
+            sides=[ahead, behind],
+        )
+
+    m = RE_CHESS_SWAP.match(prompt)
+    if m:
+        held = chess_squad(m.group(1))
+        target = chess_squad(m.group(2))
+        if held is None or target is None:
+            return None
+        return Parsed(
+            "chessSwap",
+            "+?",
+            held + target,
+            Fraction(sum(target) - sum(held)),
+            sides=[held, target],
+        )
+
+    squad = chess_squad(prompt)
+    if squad is not None:
+        return Parsed("chessSum", "+", squad, Fraction(sum(squad)), sides=[squad])
+
+    return None
 
 
 def evaluate(prompt: str) -> Parsed | None:
@@ -348,6 +447,11 @@ def evaluate(prompt: str) -> Parsed | None:
     Exact rational arithmetic throughout: `Fraction` makes `½ of 7` come back as
     7/2 rather than a float that rounds into looking correct.
     """
+    # A chess piece anywhere in the prompt settles which grammar applies: no
+    # arithmetic prompt contains one, and no chess prompt is missing one.
+    if RE_ANY_CHESS.search(prompt):
+        return evaluate_chess(prompt)
+
     m = RE_FRACTION.match(prompt)
     if m:
         denominator = FRACTION_GLYPHS[m.group(1)]
@@ -442,6 +546,25 @@ def degeneracy(parsed: Parsed) -> str:
         _, total = parsed.operands
         if total == 0:
             return "fraction of zero"
+    elif parsed.form == "chessSum":
+        if len(parsed.operands) < 2:
+            return "counts a single piece, so there is nothing to add"
+        if all(value == 1 for value in parsed.operands):
+            # The point of the skill is what a piece is worth. A row of 1s can
+            # be answered without ever looking at which piece is which.
+            return "counts nothing but pawns"
+    elif parsed.form == "chessSwap":
+        held, target = parsed.sides
+        if not held or not target:
+            return "shows a side with no pieces on it"
+        if sum(target) == sum(held):
+            return "asks what is missing from a trade that is already even"
+    elif parsed.form == "chessLead":
+        ahead, behind = parsed.sides
+        if not ahead or not behind:
+            return "shows a side with no pieces on it"
+        if sum(ahead) == sum(behind):
+            return "asks how far ahead a player is when the sides are level"
     return ""
 
 
@@ -603,6 +726,18 @@ def main() -> int:
                 f"answers-are-keypad-typable: {where} answered {answer}, above the "
                 f"{MAX_TYPABLE_ANSWER} a three-digit keypad entry can express"
             )
+
+        # P2b - a chess prompt is only self-contained because it prints each
+        # piece's value beside it. Arithmetic cannot catch a wrong one: Python
+        # adds up exactly what is on the screen, so `♟5 + ♟5` answering 10 is
+        # perfectly consistent and still teaches a seven-year-old that a pawn is
+        # worth a rook. This is the only check standing between him and that.
+        for glyph, printed in RE_CHESS_PIECE.findall(prompt):
+            if int(printed) != CHESS_VALUES[glyph]:
+                violations.append(
+                    f"chess-values-are-honest: {where} prints {glyph}{printed}, but a "
+                    f"{CHESS_NAMES[glyph]} is worth {CHESS_VALUES[glyph]}"
+                )
 
         # P2 - the point of the whole script: evaluate the prompt independently.
         parsed = evaluate(prompt)
@@ -988,10 +1123,10 @@ def main() -> int:
         return 1
 
     print("OK: every answer is a non-negative whole number a keypad can type, every")
-    print("    prompt re-evaluates in Python to exactly the answer the engine gave, no")
-    print("    generator throws at any tier, every tier offers real variety, every")
-    print("    declared skill is reachable, no prompt is degenerate, and difficulty")
-    print("    never goes backwards.")
+    print("    prompt re-evaluates in Python to exactly the answer the engine gave, every")
+    print("    chess piece is printed at the value it is really worth, no generator throws")
+    print("    at any tier, every tier offers real variety, every declared skill is")
+    print("    reachable, no prompt is degenerate, and difficulty never goes backwards.")
     return 0
 
 

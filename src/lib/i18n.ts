@@ -158,6 +158,23 @@ export const STRINGS = {
   },
   somethingWentWrong: { en: 'Something went wrong. Try again.', zh: '出错了，请重试。' },
 
+  // Crash recovery. A render error in the App Router is a blank white screen,
+  // which to a seven-year-old is indistinguishable from the game being gone.
+  // These are the words on the screen that replaces it, so they say the two
+  // things he needs: it is not his fault, and nothing has been lost.
+  crashTitle: { en: 'Oops! The game tripped over', zh: '哎呀！游戏绊了一下' },
+  crashBody: {
+    en: 'Your creatures, badges and stars are all still saved. Nothing was deleted.',
+    zh: '你的伙伴、徽章和星星都还好好地保存着，什么都没有被删除。',
+  },
+  tryAgain: { en: 'Try again', zh: '再试一次' },
+  /** The disclosure that reveals the destructive option, after a retry failed. */
+  stillStuck: { en: 'Still stuck?', zh: '还是不行？' },
+  eraseSaveWarning: {
+    en: 'Starting a brand new game fixes a stuck game, but your album goes with it. This cannot be undone.',
+    zh: '重新开始可以修好卡住的游戏，但你的图鉴也会一起消失，而且无法撤销。',
+  },
+
   // Settings
   settings: { en: 'Settings', zh: '设置' },
   sound: { en: 'Sound', zh: '声音' },

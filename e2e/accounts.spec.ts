@@ -1,4 +1,5 @@
 import { type Page, expect, test } from '@playwright/test';
+import { STORAGE_KEY } from '../src/lib/storage/client';
 import { createTrainer, playBattleToEnd } from './helpers';
 
 /**
@@ -128,23 +129,34 @@ test.describe('accounts', () => {
   });
 
   /**
-   * The conflict the one-line last-write-wins rule used to lose.
+   * A genuine two-device conflict - the one the old last-write-wins rule lost.
    *
-   * Two devices are both signed in. The laptop plays; then the tablet - which
-   * has not pulled since - only *toggles a setting*, which bumps `updatedAt` to
-   * now (`src/app/settings/page.tsx`) without earning anything, and pushes.
-   * Under a pure last-write-wins merge that stale save beat the laptop's
-   * battle, and the laptop's next sync deleted its own progress to match. The
-   * merge in `reconcile` keeps both sides' albums, badges and counters, so
-   * opening the laptop again brings everything back rather than throwing the
-   * newer work away.
+   * The tablet and the laptop are both signed in and have both got ahead of the
+   * other. Then the tablet, which has not pulled since, *only toggles a
+   * setting*: that bumps `updatedAt` to now (`src/app/settings/page.tsx`)
+   * without earning anything, and pushes. Under the old one-line rule that
+   * stale save was simply "newer", so the laptop's next sync threw the laptop's
+   * own album away to match it. `reconcile` now merges what was earned, so
+   * opening the laptop again brings everything back.
    *
-   * `scripts/audit_sync.py` sweeps this property over a corpus of divergent
-   * saves; this test is the same conflict through two real browser contexts,
-   * two real localStorages and the real API.
+   * The divergence is written into each device's `localStorage` rather than
+   * played out, on purpose:
+   *   - the battle path already has coverage in 'carries progress to a
+   *     different device' and in `game.spec.ts`; what is under test here is the
+   *     merge, and seeding lets the conflict be stated exactly rather than
+   *     hoped for;
+   *   - a save written by hand is also what a *real* offline session looks like
+   *     from the server's point of view - a device that vanished and came back
+   *     further along.
+   * `scripts/audit_sync.py` sweeps the same property over a corpus of profiles
+   * that *are* built by playing.
    */
   test('merges two devices instead of letting the last writer win', async ({ page, browser }) => {
     const name = uniqueName('Merge');
+    const now = Date.now();
+    /** An hours-old timestamp, so the settings toggle later is genuinely newer. */
+    const hoursAgo = (hours: number) => new Date(now - hours * 3600_000).toISOString();
+
     const readProfile = (target: Page) =>
       target.evaluate(async () => {
         const response = await fetch('/api/profile', { cache: 'no-store' });
@@ -153,11 +165,29 @@ test.describe('accounts', () => {
           caught: string[];
           badges: string[];
           battlesWon: number;
-          problemsCorrect: number;
+          bestCombo: number;
+          settings: { sound: boolean };
         };
       });
 
-    // The tablet: sign up, then play a battle so there is something to lose.
+    /** Puts a save on the device *and* on the server, with no merge in between. */
+    const seed = (target: Page, key: string, patch: Record<string, unknown>) =>
+      target.evaluate(
+        async ([storageKey, changes]) => {
+          const stored = window.localStorage.getItem(storageKey as string);
+          const profile = { ...JSON.parse(stored as string), ...(changes as object) };
+          window.localStorage.setItem(storageKey as string, JSON.stringify(profile));
+          await fetch('/api/profile', {
+            method: 'PUT',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ profile }),
+          });
+          return profile as { caught: string[] };
+        },
+        [key, patch] as const,
+      );
+
+    // The tablet: an account, and an afternoon of play behind it.
     await createTrainer(page, name, 'cindik');
     await page.goto('/login');
     await page.getByLabel(/what's your trainer name/i).fill(name);
@@ -165,15 +195,21 @@ test.describe('accounts', () => {
     await page.getByTestId('submit-login').click();
     await expect(page).toHaveURL(/\/$/);
 
-    await page.getByTestId('tile-play').click();
-    await page.locator('[data-testid^="opponent-"]').first().click();
-    await playBattleToEnd(page);
-    await page.getByRole('button', { name: /^home$/i }).click();
+    await seed(page, STORAGE_KEY, {
+      xp: 500,
+      caught: ['cindik', 'sproutle', 'bublet'],
+      badges: ['first-win'],
+      battlesWon: 3,
+      problemsCorrect: 40,
+      problemsTotal: 50,
+      bestCombo: 7,
+      updatedAt: hoursAgo(3),
+    });
+    await page.reload();
     await expect(page.getByTestId('sync-status')).toContainText(/saved to your account/i);
-    await page.waitForTimeout(2500);
 
-    // The laptop: a genuinely separate client. It signs in, picks up the
-    // tablet's save, and plays a battle of its own.
+    // The laptop: a genuinely separate client - its own localStorage, its own
+    // cookies. It signs in, picks up the tablet's save, and gets further ahead.
     const laptopContext = await browser.newContext();
     const laptop = await laptopContext.newPage();
     await laptop.goto('/login');
@@ -182,44 +218,57 @@ test.describe('accounts', () => {
     await laptop.getByLabel(/4-digit pin/i).fill('1234');
     await laptop.getByTestId('submit-login').click();
     await expect(laptop).toHaveURL(/\/$/);
-
-    await laptop.getByTestId('tile-play').click();
-    await laptop.locator('[data-testid^="opponent-"]').first().click();
-    await playBattleToEnd(laptop);
-    await laptop.getByRole('button', { name: /^home$/i }).click();
     await expect(laptop.getByTestId('sync-status')).toContainText(/saved to your account/i);
-    await laptop.waitForTimeout(2500);
+    expect((await readProfile(laptop)).caught).toContain('sproutle');
 
-    const afterLaptop = await readProfile(laptop);
-    expect(afterLaptop.battlesWon).toBe(2);
+    await seed(laptop, STORAGE_KEY, {
+      xp: 800,
+      caught: ['cindik', 'sproutle', 'bublet', 'pebblo'],
+      badges: ['first-win', 'combo-5'],
+      battlesWon: 5,
+      problemsCorrect: 70,
+      problemsTotal: 90,
+      bestCombo: 9,
+      updatedAt: hoursAgo(1),
+    });
 
-    // The tablet has been sitting open all this time and never pulled. All it
-    // does is flip the sound off - and that alone used to cost the laptop its
-    // battle, because it makes the tablet's older save the newer write.
-    await page.goto('/settings');
+    // The tablet has been sitting open the whole time and never pulled. All it
+    // does is flip the sound off, from inside the app so the page never
+    // remounts and never re-reads the server - and that alone is enough to make
+    // its three-hour-old save the newest write there is.
+    await page.getByRole('link', { name: /settings/i }).click();
+    await expect(page).toHaveURL(/\/settings$/);
     await page.getByTestId('toggle-sound').click();
     await page.waitForTimeout(2500);
 
-    // Opening the laptop again reconciles. Nothing either device earned is gone.
-    await laptop.goto('/');
+    // The server takes that push at face value - `PUT /api/profile` stores what
+    // it is given. So at this moment the server really has lost the laptop's
+    // creature, and only the laptop still has it.
+    expect((await readProfile(page)).caught).not.toContain('pebblo');
+
+    // Opening the laptop again is where the two saves meet. Nothing either
+    // device earned may be gone afterwards.
+    await laptop.reload();
     await expect(laptop.getByTestId('sync-status')).toContainText(/saved to your account/i);
     await laptop.waitForTimeout(2500);
 
     const merged = await readProfile(laptop);
-    expect(merged.battlesWon).toBeGreaterThanOrEqual(afterLaptop.battlesWon);
-    expect(merged.xp).toBeGreaterThanOrEqual(afterLaptop.xp);
-    expect(merged.problemsCorrect).toBeGreaterThanOrEqual(afterLaptop.problemsCorrect);
-    expect(merged.caught).toEqual(expect.arrayContaining(afterLaptop.caught));
-    expect(merged.badges).toEqual(expect.arrayContaining(afterLaptop.badges));
+    expect(merged.caught).toEqual(expect.arrayContaining(['sproutle', 'bublet', 'pebblo']));
+    expect(merged.badges).toEqual(expect.arrayContaining(['first-win', 'combo-5']));
+    expect(merged.xp).toBe(800);
+    expect(merged.battlesWon).toBe(5);
+    expect(merged.bestCombo).toBe(9);
+    // ...while the newest write still decides the mutable state it was about.
+    expect(merged.settings.sound).toBe(false);
 
     // And the tablet agrees the next time it is opened: one album, both devices.
-    await page.goto('/');
+    await page.reload();
     await expect(page.getByTestId('sync-status')).toContainText(/saved to your account/i);
     await page.waitForTimeout(2500);
     const onTablet = await readProfile(page);
-    expect(onTablet.battlesWon).toBe(merged.battlesWon);
     expect(onTablet.caught).toEqual(expect.arrayContaining(merged.caught));
     expect(onTablet.badges).toEqual(expect.arrayContaining(merged.badges));
+    expect(onTablet.xp).toBe(800);
 
     await laptopContext.close();
   });

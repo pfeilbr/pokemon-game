@@ -56,6 +56,37 @@ describe('generateProblem', () => {
   it('yields a prompt whose arithmetic actually matches the answer', () => {
     // Re-evaluates each prompt independently of the generator that made it.
     const evaluate = (prompt: string): number | null => {
+      // Chess prompts print each piece's value beside it, so they are added up
+      // from what is on the screen. Whether the printed value is the piece's
+      // real value is a separate question, asked further down.
+      if (/[♔-♟]/.test(prompt)) {
+        const squad = (text: string): number[] | null => {
+          const values: number[] = [];
+          for (const term of text.split(' + ')) {
+            const piece = term.match(/^[♟♞♝♜♛](\d+)$/);
+            if (!piece) return null;
+            values.push(Number(piece[1]));
+          }
+          return values;
+        };
+        const sum = (values: number[]): number => values.reduce((a, b) => a + b, 0);
+
+        const lead = prompt.match(/^\((.+)\) − \((.+)\)$/);
+        if (lead) {
+          const ahead = squad(lead[1] ?? '');
+          const behind = squad(lead[2] ?? '');
+          return ahead && behind ? sum(ahead) - sum(behind) : null;
+        }
+        const swap = prompt.match(/^(.+) \+ \? = (.+)$/);
+        if (swap) {
+          const held = squad(swap[1] ?? '');
+          const target = squad(swap[2] ?? '');
+          return held && target ? sum(target) - sum(held) : null;
+        }
+        const pieces = squad(prompt);
+        return pieces ? sum(pieces) : null;
+      }
+
       const fraction = prompt.match(/^([½⅓¼]) of (\d+)$/);
       if (fraction) {
         const d = { '½': 2, '⅓': 3, '¼': 4 }[fraction[1]!]!;
@@ -154,6 +185,108 @@ describe('skill coverage', () => {
 
   it('gives more time at higher tiers', () => {
     expect(parTimeForTier(1)).toBeLessThan(parTimeForTier(10));
+  });
+});
+
+/**
+ * The chess strand.
+ *
+ * These are properties about the *chess*, not about the arithmetic - the sweep
+ * above already re-derives every answer. What they protect is the reason the
+ * chess skills are allowed to exist at all: the prompt has to be answerable by a
+ * child who has never seen a board, and it has to be true for the one who has.
+ */
+describe('the chess strand', () => {
+  const CHESS_SKILLS = ['chessValue', 'chessSwap', 'chessLead'] as const;
+  /** Restated on purpose: a test that imported the table could not catch it. */
+  const REAL_VALUES: Record<string, number> = { '♟': 1, '♞': 3, '♝': 3, '♜': 5, '♛': 9 };
+
+  /** Every chess problem the generators can produce, swept across their bands. */
+  const sweep = (): { skill: string; tier: number; prompt: string; answer: number }[] => {
+    const out: { skill: string; tier: number; prompt: string; answer: number }[] = [];
+    for (const skill of CHESS_SKILLS) {
+      const meta = SKILL_META[skill];
+      for (let tier = meta.minTier; tier <= meta.maxTier; tier++) {
+        const rng = createRng(`math.test:${skill}:${tier}`);
+        for (let i = 0; i < 3000; i++) {
+          const { prompt, answer } = meta.generate(rng, tier);
+          out.push({ skill, tier, prompt, answer });
+        }
+      }
+    }
+    return out;
+  };
+
+  // Deterministic, so it is swept once and shared rather than rebuilt per test.
+  const PROBLEMS = sweep();
+
+  it('prints every piece at the value it is really worth', () => {
+    // The prompt is self-contained *because* of these numbers. Get one wrong
+    // and the arithmetic still checks out - the sum agrees with itself - while
+    // a seven-year-old is quietly taught that a pawn is worth a rook.
+    for (const { prompt } of PROBLEMS) {
+      for (const [, glyph, printed] of prompt.matchAll(/([♟♞♝♜♛])(\d+)/g)) {
+        expect(Number(printed), `${prompt} prints ${glyph}${printed}`).toBe(REAL_VALUES[glyph!]);
+      }
+    }
+  });
+
+  it('never shows a piece without its value, so the question needs no chess', () => {
+    for (const { prompt } of PROBLEMS) {
+      // Every chess glyph in the prompt is immediately followed by a digit.
+      expect(prompt.replace(/[♟♞♝♜♛]\d/g, ''), prompt).not.toMatch(/[♔-♟]/);
+    }
+  });
+
+  it('never shows a king, which has no value because it is never traded', () => {
+    for (const { prompt } of PROBLEMS) {
+      expect(prompt, prompt).not.toMatch(/[♔♚]/);
+    }
+  });
+
+  it('asks how far ahead, never what the difference is', () => {
+    // A lead of zero is not a lead, and a lead below zero cannot be typed on a
+    // keypad with no minus key. Both are excluded by construction.
+    for (const { skill, prompt, answer } of PROBLEMS) {
+      if (skill !== 'chessLead') continue;
+      expect(answer, prompt).toBeGreaterThan(0);
+    }
+  });
+
+  it('never asks a trade that is already even', () => {
+    for (const { skill, prompt, answer } of PROBLEMS) {
+      if (skill !== 'chessSwap') continue;
+      expect(answer, prompt).toBeGreaterThan(0);
+    }
+  });
+
+  it('always counts at least one piece worth more than a pawn', () => {
+    // A row of 1s can be answered without ever looking at which piece is which,
+    // which is the one thing this skill is for.
+    for (const { skill, prompt } of PROBLEMS) {
+      if (skill !== 'chessValue') continue;
+      expect(prompt, prompt).toMatch(/[♞♝♜♛]/);
+    }
+  });
+
+  it('reaches every tier of the ladder', () => {
+    // He goes to chess camp every week, not at tier 4. Whatever difficulty the
+    // adapter settles on, some of the questions should look like his other
+    // hobby.
+    for (const tier of TIERS) {
+      const chess = skillsForTier(tier).filter((m) => m.skill.startsWith('chess'));
+      expect(chess.length, `tier ${tier} has no chess`).toBeGreaterThan(0);
+    }
+  });
+
+  it('gets harder up the ladder rather than repeating one question', () => {
+    const hardest = (skill: (typeof CHESS_SKILLS)[number], tier: number): number =>
+      PROBLEMS.filter((p) => p.skill === skill && p.tier === tier)
+        .reduce((top, p) => Math.max(top, p.answer), 0);
+
+    expect(hardest('chessValue', 5)).toBeGreaterThan(hardest('chessValue', 1));
+    expect(hardest('chessSwap', 8)).toBeGreaterThan(hardest('chessSwap', 4));
+    expect(hardest('chessLead', 10)).toBeGreaterThan(hardest('chessLead', 7));
   });
 });
 

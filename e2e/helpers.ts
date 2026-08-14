@@ -11,6 +11,27 @@ import { type Page, expect } from '@playwright/test';
 export function solve(prompt: string): number {
   const text = prompt.trim();
 
+  // Chess prompts print each piece's value beside it (`♜5 + ♟1`), which is what
+  // makes them answerable without knowing chess - so the solver adds up exactly
+  // what is on the screen, the way a player reads it, and never consults a table
+  // of what a piece is worth.
+  if (/[♔-♟]/.test(text)) {
+    const squad = (side: string): number =>
+      side.split(' + ').reduce((total, term) => {
+        const piece = term.match(/^[♟♞♝♜♛](\d+)$/);
+        if (!piece) throw new Error(`E2E solver cannot read the chess term: "${term}"`);
+        return total + Number(piece[1]);
+      }, 0);
+
+    const lead = text.match(/^\((.+)\) − \((.+)\)$/);
+    if (lead) return squad(lead[1] ?? '') - squad(lead[2] ?? '');
+
+    const swap = text.match(/^(.+) \+ \? = (.+)$/);
+    if (swap) return squad(swap[2] ?? '') - squad(swap[1] ?? '');
+
+    return squad(text);
+  }
+
   const fraction = text.match(/^([½⅓¼]) of (\d+)$/);
   if (fraction) {
     const denominator = { '½': 2, '⅓': 3, '¼': 4 }[fraction[1]!]!;

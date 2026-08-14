@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { FaultProbe } from './FaultProbe';
 import { useGame } from './GameProvider';
 import { STRINGS } from '@/lib/i18n';
 
@@ -26,6 +27,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="mx-auto flex min-h-[100dvh] w-full max-w-5xl flex-col">
+      {/* Renders nothing. It sits here, inside the page rather than the layout,
+          because that is where `app/error.tsx` can catch what it throws - the
+          same place a real page crash happens. See FaultProbe for how it is
+          armed and why it cannot fire for a player. */}
+      <FaultProbe />
       <header className="flex items-center justify-between gap-3 px-4 pt-4 pb-2">
         <Link href="/" className="flex items-center gap-2">
           <span className="text-2xl" aria-hidden>

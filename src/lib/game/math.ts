@@ -29,6 +29,13 @@ export const SKILLS = [
   'add3',
   'fraction',
   'twoStep',
+  // The chess strand. It runs the whole ladder rather than sitting at one tier,
+  // because it is the half of this player's life the game did not have: count
+  // material (tiers 1-5), work out what is missing from a trade (4-8), then
+  // compare two sides (7-10).
+  'chessValue',
+  'chessSwap',
+  'chessLead',
 ] as const;
 
 export type Skill = (typeof SKILLS)[number];
@@ -72,6 +79,91 @@ function addPair(rng: Rng, lo: number, hi: number): [number, number] {
   const a = rng.int(Math.max(1, total - 9), Math.min(9, total - 1));
   return [a, total - a];
 }
+
+// ---------------------------------------------------------------------------
+// Chess
+// ---------------------------------------------------------------------------
+
+/**
+ * The piece values a chess camp teaches in its first week.
+ *
+ * Every chess prompt prints the value next to the piece (`♜5`), which is the
+ * whole reason these skills are arithmetic rather than trivia: a child who has
+ * never seen a board can add the question up from what is on the screen, and
+ * the child who goes to chess camp gets to recognise a number he already knows.
+ * Nothing here rewards remembering the table, and nothing punishes not knowing
+ * it.
+ *
+ * The king is deliberately absent. It has no point value because it is never
+ * traded, and inventing one to fill the gap would teach the wrong thing about
+ * the game.
+ *
+ * The glyphs are the *black* (filled) chess characters. The outlined white ones
+ * disappear against the light-on-dark prompt at the size it renders.
+ */
+type ChessPiece = { glyph: string; value: number };
+
+const CHESS_PIECES: readonly ChessPiece[] = [
+  { glyph: '♟', value: 1 },
+  { glyph: '♞', value: 3 },
+  { glyph: '♝', value: 3 },
+  { glyph: '♜', value: 5 },
+  { glyph: '♛', value: 9 },
+];
+
+/** No queen: nine is a big jump, and the early tiers get there without her. */
+const CHESS_LIGHT: readonly ChessPiece[] = CHESS_PIECES.filter((p) => p.value < 9);
+
+/**
+ * Anything worth more than a pawn.
+ *
+ * A prompt of nothing but 1s is counting practice wearing a chess hat - it can
+ * be answered without ever looking at which piece is which. Every squad the
+ * generators build is anchored on one of these, and `audit_curriculum.py` fails
+ * an all-pawn prompt as degenerate so the rule cannot quietly lapse.
+ */
+const CHESS_ABOVE_PAWN: readonly ChessPiece[] = CHESS_PIECES.filter((p) => p.value > 1);
+const CHESS_LIGHT_ABOVE_PAWN: readonly ChessPiece[] = CHESS_LIGHT.filter((p) => p.value > 1);
+
+/** Material is counted biggest piece first, the way a player counts it. */
+const byValueDesc = (a: ChessPiece, b: ChessPiece): number => b.value - a.value;
+
+function chessTotal(squad: readonly ChessPiece[]): number {
+  return squad.reduce((sum, piece) => sum + piece.value, 0);
+}
+
+/** `♛9 + ♟1`. Each piece carries its own value, so the prompt is self-contained. */
+function chessTerms(squad: readonly ChessPiece[]): string {
+  return squad.map((piece) => `${piece.glyph}${piece.value}`).join(' + ');
+}
+
+function chessSquad(rng: Rng, count: number, army: readonly ChessPiece[]): ChessPiece[] {
+  return Array.from({ length: count }, () => rng.pick(army)).sort(byValueDesc);
+}
+
+/**
+ * Every squad of one or two pieces that can be drawn from an army.
+ *
+ * `chessLead` picks the richer side from this table and then a strictly cheaper
+ * one from below it, so the lead comes out positive by construction rather than
+ * by a retry loop that might not terminate. The keypad has no minus key, and
+ * "how far ahead" is a question a seven-year-old can answer; "what is the
+ * difference" is one that can go negative.
+ */
+function chessSquads(army: readonly ChessPiece[]): ChessPiece[][] {
+  const out: ChessPiece[][] = [];
+  for (const first of army) {
+    out.push([first]);
+    // One ordering per pair, biggest first - `♜5 + ♟1` and never `♟1 + ♜5`.
+    for (const second of army) {
+      if (second.value <= first.value) out.push([first, second]);
+    }
+  }
+  return out;
+}
+
+const CHESS_SQUADS: readonly ChessPiece[][] = chessSquads(CHESS_PIECES);
+const CHESS_LIGHT_SQUADS: readonly ChessPiece[][] = chessSquads(CHESS_LIGHT);
 
 export const SKILL_META: Record<Skill, SkillMeta> = {
   add1: {
@@ -218,6 +310,85 @@ export const SKILL_META: Record<Skill, SkillMeta> = {
       // Parenthesised on purpose: teaches grouping without relying on the
       // player already knowing operator precedence.
       return { prompt: `(${a} × ${b}) + ${c}`, answer: a * b + c };
+    },
+  },
+
+  // --- the chess strand ----------------------------------------------------
+  // Three steps, deliberately spread across the whole ladder: add up what is on
+  // the board, work out what is missing from a trade, then compare two sides.
+  // The Chinese labels use the words a Chinese-speaking chess player uses -
+  // 兑子 (trading pieces) and 子力 (material) - rather than a transliteration of
+  // the English, and the first one says 国际象棋 outright because 象棋 on its own
+  // means Chinese chess, which has no queen and does not count material this
+  // way. The pieces on screen are the international ones, so the label says so.
+  chessValue: {
+    skill: 'chessValue',
+    label: { en: 'Chess piece points', zh: '国际象棋分值' },
+    minTier: 1,
+    maxTier: 5,
+    generate: (rng, tier) => {
+      const army = tier <= 3 ? CHESS_LIGHT : CHESS_PIECES;
+      const anchors = tier <= 3 ? CHESS_LIGHT_ABOVE_PAWN : CHESS_ABOVE_PAWN;
+      const count = tier <= 2 ? 2 : tier <= 3 ? 3 : rng.int(3, 4);
+      const squad = [rng.pick(anchors), ...chessSquad(rng, count - 1, army)].sort(byValueDesc);
+      return { prompt: chessTerms(squad), answer: chessTotal(squad) };
+    },
+  },
+  chessSwap: {
+    skill: 'chessSwap',
+    label: { en: 'Even trade', zh: '等价兑子' },
+    minTier: 4,
+    maxTier: 8,
+    generate: (rng, tier) => {
+      // The side being matched is always anchored above a pawn: `♟1 + ? = ♟1`
+      // has nothing left to make up, and a lone pawn is not something a player
+      // ever trades *into*.
+      const anchor = rng.pick(CHESS_ABOVE_PAWN);
+      const wide = tier >= 6;
+      const partner = wide && rng.next() < 0.5 ? [rng.pick(CHESS_PIECES)] : [];
+      const target = [anchor, ...partner].sort(byValueDesc);
+      const total = chessTotal(target);
+
+      // Held is strictly cheaper than the target, so the missing number is at
+      // least 1. `total` is 3 or more, so a pawn always fits and this pool is
+      // never empty.
+      const held = [rng.pick(CHESS_PIECES.filter((p) => p.value < total))];
+      // At most three pieces on screen: a second held piece only when the
+      // target is a single one, or the prompt stops fitting a phone.
+      if (wide && partner.length === 0) {
+        const room = CHESS_PIECES.filter((p) => p.value <= total - chessTotal(held) - 1);
+        if (room.length > 0) held.push(rng.pick(room));
+      }
+      held.sort(byValueDesc);
+
+      return {
+        prompt: `${chessTerms(held)} + ? = ${chessTerms(target)}`,
+        answer: total - chessTotal(held),
+      };
+    },
+  },
+  chessLead: {
+    skill: 'chessLead',
+    label: { en: 'Material lead', zh: '子力领先' },
+    minTier: 7,
+    maxTier: 10,
+    generate: (rng, tier) => {
+      // The queen and a guaranteed piece on each side arrive together at tier 9,
+      // so the top of the ladder always asks for two sums and a comparison
+      // rather than `(♞3) − (♟1)`, which is a subtraction wearing a chess hat.
+      const squads =
+        tier <= 8 ? CHESS_LIGHT_SQUADS : CHESS_SQUADS.filter((s) => s.length === 2);
+      // Richer side first, then a strictly cheaper one from what is left below
+      // it. Both filters are non-empty: the cheapest squad is worth 1 (a lone
+      // pawn) or 2 (two of them), so there is always something worth more, and
+      // always something worth less than that.
+      const cheapest = Math.min(...squads.map(chessTotal));
+      const ahead = rng.pick(squads.filter((s) => chessTotal(s) > cheapest));
+      const behind = rng.pick(squads.filter((s) => chessTotal(s) < chessTotal(ahead)));
+      return {
+        prompt: `(${chessTerms(ahead)}) − (${chessTerms(behind)})`,
+        answer: chessTotal(ahead) - chessTotal(behind),
+      };
     },
   },
 };
