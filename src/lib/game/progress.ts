@@ -726,6 +726,8 @@ export function reconcile(local: Profile | null, remote: Profile | null): Profil
   if (!local) return remote;
   if (!remote) return local;
 
+  return Date.parse(remote.updatedAt) > Date.parse(local.updatedAt) ? remote : local;
+
   const remoteAt = Date.parse(remote.updatedAt);
   const localAt = Date.parse(local.updatedAt);
   const remoteReadable = Number.isFinite(remoteAt);

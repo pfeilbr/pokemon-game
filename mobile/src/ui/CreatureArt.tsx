@@ -79,6 +79,7 @@ function Primitive({ shape }: { shape: Shape }) {
           y={shape.y}
           width={shape.width}
           height={shape.height}
+          rx={shape.rx}
           {...paint(shape as never)}
         />
       );

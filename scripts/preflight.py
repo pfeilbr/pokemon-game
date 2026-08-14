@@ -626,9 +626,17 @@ class Parking:
                 return True, "already restored"
             return False, f"parked copy has vanished from {self.parked}"
         if os.path.lexists(self.source):
+            # Something reinstalled the directory mid-run (`cd mobile && npm ci`
+            # in another terminal, or another agent in a shared checkout).
+            # Overwriting either copy silently is the one outcome worse than
+            # stopping, so this stops - and says where both halves are.
             return False, (
-                f"{self.source} reappeared while parked - refusing to overwrite it. "
-                f"Your original is at {self.parked}"
+                f"{self.source} reappeared while this run had it parked, so there are "
+                f"now two copies and neither is safe to delete on your behalf.\n"
+                f"      new copy (in the tree): {self.source}\n"
+                f"      yours (parked by this run): {self.parked}\n"
+                f"      Keep one: `rm -rf {self.parked}` to accept the reinstall, or "
+                f"`rm -rf {self.source} && mv {self.parked} {self.source}` to keep yours."
             )
         with deferred_signals():
             try:
@@ -754,23 +762,34 @@ def run_step(step: Step, base_env: dict[str, str], opts: argparse.Namespace, log
                 argv = shlex.split(part)
                 log.write(f"$ {part}\n")
                 log.flush()
-                if opts.stream:
-                    proc = subprocess.run(argv, cwd=REPO_ROOT, env=env, check=False)
-                    code = proc.returncode
-                else:
-                    proc = subprocess.run(
-                        argv,
-                        cwd=REPO_ROOT,
-                        env=env,
-                        check=False,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
-                        text=True,
-                        errors="replace",
-                    )
-                    code = proc.returncode
-                    log.write(proc.stdout)
-                    captured.append(proc.stdout)
+                pipe = None if opts.stream else subprocess.PIPE
+                proc = subprocess.Popen(
+                    argv,
+                    cwd=REPO_ROOT,
+                    env=env,
+                    stdout=pipe,
+                    stderr=subprocess.STDOUT if pipe else None,
+                    text=True,
+                    errors="replace",
+                )
+                try:
+                    out = proc.communicate()[0]
+                except BaseException:
+                    # A signal reached us mid-step. Take the child with us: an
+                    # orphaned `next start` holding port 3100, or a vitest run
+                    # nobody is reading, outlives the run that started it and
+                    # confuses the next one.
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait(timeout=10)
+                    raise
+                code = proc.returncode
+                if out:
+                    log.write(out)
+                    captured.append(out)
                 log.write(f"\n[exit {code}]\n")
                 if code != 0:
                     break
