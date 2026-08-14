@@ -15,7 +15,9 @@
     "test:all": "npm run typecheck && npm run test && npm run test:e2e",
     "screenshots": "playwright test e2e/screenshots.spec.ts",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "preflight": "python3 scripts/preflight.py",
+    "audits": "python3 scripts/audit_assets.py && python3 scripts/audit_a11y.py && python3 scripts/audit_auth.py && python3 scripts/audit_api.py && python3 scripts/audit_docs.py && python3 scripts/audit_i18n.py && python3 scripts/audit_art.py && python3 scripts/audit_curriculum.py && python3 scripts/audit_replay.py && python3 mobile/scripts/audit_parity.py"
   },
   "dependencies": {
     "jose": "^6.2.8",

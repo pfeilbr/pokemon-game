@@ -38,6 +38,14 @@ jobs:
       # Until this script existed that was enforced by good intentions alone -
       # one dropped .png or one webfont <link> would have falsified it in
       # silence. Runs first because it needs no dependencies and is instant.
+      # Executes nothing (~0.1s). It parses this very file, so it fails loudly
+      # if someone writes YAML the preflight's parser cannot read, or renames the
+      # `verify` job - drift that would otherwise be discovered only by the next
+      # person to run `npm run preflight`, which is exactly when it is least
+      # welcome.
+      - name: Preflight can still read this workflow
+        run: python3 scripts/preflight.py --plan
+
       - name: Asset and trademark audit
         run: python3 scripts/audit_assets.py
 
@@ -47,6 +55,21 @@ jobs:
       # with no `minHeight`, broke it in silence. Also needs no dependencies.
       - name: Accessibility audit (tap targets, names, reduced motion)
         run: python3 scripts/audit_a11y.py
+
+      # A 4-digit PIN is 10,000 combinations, so the lockout is the defence and
+      # not the hash. This has always been true and was never enforced here -
+      # the script existed and the workflow never ran it, which is the same as
+      # not having it. Also stdlib-only, so it belongs before `npm ci`.
+      - name: Account security audit (lockout, hashing, non-enumerability)
+        run: python3 scripts/audit_auth.py
+
+      # audit_auth covers the account; this covers the HTTP layer underneath it.
+      # Bodies were unbounded (the Pages Router's sizeLimit did not survive the
+      # move to route handlers and nothing replaced it), and the only rate limit
+      # was the per-account lockout, which a name-rotating sweep never trips
+      # because every fresh name gets a fresh five guesses.
+      - name: API surface audit (body limits, throttling, cookies, leaks)
+        run: python3 scripts/audit_api.py
 
       - uses: actions/setup-node@v4
         with:
@@ -69,6 +92,36 @@ jobs:
       - name: Documentation audit (claims vs. source)
         run: python3 scripts/audit_docs.py
 
+      # The four below also need `npm ci`, for the same reason as the docs audit:
+      # each drives the real engine through the repo's own esbuild rather than
+      # restating what it believes the engine does.
+
+      # The types enforce that a phrase HAS both languages. Nothing enforced that
+      # a string ever reached t(). Four accessible names read `.en` directly, so
+      # a Chinese-speaking child using VoiceOver heard English creature names.
+      - name: Bilingual audit (both languages actually reach the screen)
+        run: python3 scripts/audit_i18n.py
+
+      # 36 creatures and no image files: a missing branch in art.ts draws
+      # nothing, and nothing looks exactly like art to a shape-count test. Both
+      # of this script's headline red proofs leave art.test.ts passing 49/49.
+      - name: Creature art audit (distinct, drawable, silhouettes leak nothing)
+        run: python3 scripts/audit_art.py
+
+      # Re-parses and re-evaluates every generated prompt in Python instead of
+      # trusting the generator: one that computes its own answer wrong agrees
+      # with itself forever, and the child is marked wrong for being right.
+      - name: Curriculum audit (answers independently re-derived)
+        run: python3 scripts/audit_curriculum.py
+
+      # CLAUDE.md claims a battle can be serialised mid-fight and resumed. The
+      # one test named for that could not detect it: it cut a single fight after
+      # one turn and asserted only that two attempts were logged, so a save that
+      # dropped a field left the count intact and the fight quietly continued as
+      # a different fight.
+      - name: Battle replay audit (deterministic, resumable, JSON-total)
+        run: python3 scripts/audit_replay.py
+
       - name: Typecheck
         run: npm run typecheck
 
@@ -83,6 +136,18 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # Measures the build above rather than making its own, so this costs
+      # seconds. The realistic device is a hand-me-down iPad on a slow link and
+      # there are no images anywhere - the payload is essentially JavaScript, so
+      # a stray `import` is the regression that matters and is invisible in
+      # review. Headroom is deliberately ~8%, smaller than the smallest library
+      # someone imports by accident.
+      #
+      # Exits 2 (cannot measure) rather than 1 (over budget) when the build is
+      # missing, so a failed build can never be read as "within budget".
+      - name: Bundle budget (first-load JS on a slow connection)
+        run: python3 scripts/audit_bundle.py
 
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium

@@ -27,6 +27,20 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+
+      # CLAUDE.md's hardest rule is "never fork a rule into a client", and until
+      # this script nothing enforced it - a screen that recomputes damage rather
+      # than importing it leaves the two clients quietly disagreeing about the
+      # game while both look fine. It also checks that the iOS renderer has a
+      # branch for every primitive the engine can emit, which is the failure that
+      # already shipped once: a missing branch draws nothing, and nothing looks
+      # like art.
+      #
+      # Deliberately before `npm ci`: it parses source as text and executes
+      # nothing, so it needs no node_modules at all.
+      - name: Cross-client parity audit (no forked rules, no missing primitives)
+        run: python3 mobile/scripts/audit_parity.py
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22

@@ -38,14 +38,30 @@ and `audit_docs.py` bundling `mobile/src/storage.ts` for a string literal. To
 reproduce CI before pushing:
 
 ```bash
-# Park it OUTSIDE the repo: audit_assets.py rightly objects to an untracked,
-# un-ignored directory appearing in the tree, so a `.bak` alongside it would
-# fail this very check.
-mv mobile/node_modules /tmp/mm-node-modules
-npm run typecheck && npm run lint && npm test && npm run build
-python3 scripts/audit_assets.py && python3 scripts/audit_a11y.py && python3 scripts/audit_docs.py
-mv /tmp/mm-node-modules mobile/node_modules
+npm run preflight
 ```
+
+That is `scripts/preflight.py`, and it exists because the recipe it replaces was
+a procedure you had to *remember* — which is not a guard. It reads the check
+list out of `.github/workflows/ci.yml` rather than hardcoding one that would
+drift, parks `mobile/node_modules` outside the repo (a `.bak` alongside it would
+trip `audit_assets.py`, which rightly objects to an untracked, un-ignored
+directory appearing in the tree), runs everything CI runs that can honestly run
+locally, and prints a `NOT EXERCISED LOCALLY` section naming what it skipped and
+why — a preflight that quietly omits a check is the false confidence this repo
+keeps getting burned by.
+
+It is proven against the real historical bug: with `audit_docs.py` reverted to
+bundling `mobile/src/storage.ts`, running it directly exits 0 and the bug ships,
+while `npm run preflight` exits 1 with CI's actual
+`Could not resolve "@react-native-async-storage/async-storage"`.
+
+Restoration is belt-and-braces — `try/finally`, signal handlers, `atexit`, and a
+breadcrumb written *before* the move so even a SIGKILL is repairable by the next
+run or `npm run preflight -- --restore`. A crash that left your
+`mobile/node_modules` parked would be worse than the bug it prevents.
+
+`npm run audits` runs the audit scripts alone, without the parking.
 
 ### iOS
 
@@ -281,3 +297,13 @@ non-integer answer will fail immediately.
 
 **A badge:** add it to `BADGES` in `progress.ts`. A test asserts every badge is
 reachable by some profile, so dead badges fail the build.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
