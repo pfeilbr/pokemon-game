@@ -79,6 +79,27 @@ jobs:
       - name: Screenshot audit (the docs images are real, current and complete)
         run: python3 scripts/audit_screenshots.py
 
+      # The three iOS audits below are stdlib-only and read source as text, so
+      # they run here as well as in ios.yml. Two reasons, both learned the hard
+      # way in one commit:
+      #
+      #   - `scripts/preflight.py` derives its step list from THIS file, so an
+      #     audit that lives only in ios.yml cannot be reproduced locally. A
+      #     deep link added to mobile/App.tsx passed a full local preflight and
+      #     failed the parity audit in CI, which is precisely the local-green
+      #     CI-red split the preflight exists to abolish.
+      #   - ios.yml is path-filtered to `mobile/**` and `src/lib/**`, but the
+      #     parity audit reads `src/components/**` and `src/app/**` too. A web
+      #     change that broke cross-client parity would never have triggered it.
+      - name: Cross-client parity audit (no forked rules, no missing primitives)
+        run: python3 mobile/scripts/audit_parity.py
+
+      - name: iOS contrast audit (WCAG ratios on the React Native client)
+        run: python3 mobile/scripts/audit_contrast_ios.py
+
+      - name: iOS capture audit (the committed screens are real and distinct)
+        run: python3 mobile/scripts/audit_ios_screenshots.py
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
