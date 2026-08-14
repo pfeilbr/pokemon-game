@@ -52,6 +52,45 @@ Navigation is a `switch` in `App.tsx`, not React Navigation. Eight screens, no
 deep links, no back stack worth preserving — a navigation library would add two
 more native modules to the iOS build to replace ten lines.
 
+### When the game trips over
+
+The engine throws on invalid data on purpose, and repairs it at the boundary
+instead. That is the right call, and it means a render here _can_ throw. On the
+web that would be a blank white page and `src/app/error.tsx` catches it; React
+Native has no `error.tsx`, and an uncaught render error is worse — the tree
+unmounts, and in the **Release** build that ships to the phone the child gets a
+blank screen and then a dead app. No message, no way back, and usually no adult
+beside him who knows what happened.
+
+`src/CrashBoundary.tsx` is the counterpart: a class boundary in `App.tsx`
+wrapping `GameProvider` and the router, so a crash while reading or reconciling
+the save is caught too. It shows the same screen the web client shows, in the
+same words from the same `STRINGS` table — it is not his fault, nothing was
+lost — with a big "try again" and a way home.
+
+What it offers, and when, is not decided twice. `recoveryPlan` and
+`languageFromSave` live in `src/lib/recovery.ts` and cross the seam like any
+other rule, because they _are_ rules: **the screen never erases the save on its
+own.** The destructive option is not even rendered on the first crash. It
+appears only once a retry has demonstrably failed, and then still takes two more
+taps behind a sentence naming what it costs. Losing the album is worse than the
+crash, and `src/CrashBoundary.test.tsx` crashes the boundary with a real engine
+throw — `getCreature` on an id the roster does not have — to prove the save is
+still on the device afterwards, including after a failed retry.
+
+Two details are this client's rather than the web's. The current screen is held
+above the boundary in `App.tsx`, so "try again" remounts the subtree on the
+screen that crashed while "home" resets the screen first — with no URL to return
+to, they would otherwise be the same button twice. And erasing ends in a
+remount of everything below the boundary, which is this client's
+`window.location.reload()`: a fresh `GameProvider` reads the now-empty device
+and the game starts at sign-up.
+
+Nothing on that screen animates, which is the reduced-motion path taken to its
+end rather than a gap in it — a screen with no motion cannot get
+`AccessibilityInfo.isReduceMotionEnabled()` wrong, and a spinner would only make
+a frightening moment busier.
+
 ## Commands
 
 ```bash
@@ -159,7 +198,7 @@ reuse them afterwards.
 
 ## Status
 
-![The iOS app on a simulator](docs/ios-launch.png)
+![The iOS app on a simulator](docs/screens/01-sign-up.png)
 
 That screenshot is not a mockup. It was captured by the `simulator` job on a
 GitHub macOS runner, from a Release build with the JavaScript bundle embedded.
@@ -178,18 +217,43 @@ The game is complete and playable on the device:
   XP, the level-up, the evolution and each new badge by name.
 - **Album** — all 36 creatures grouped by element, un-caught ones as silhouettes.
 - **Progress** — badges, and per-skill maths accuracy and average time.
-- **Settings** — the language toggle (English/中文) and the sound switch, which
-  on this client is the master switch for haptics too. Both transitions are
-  exported as pure functions and tested without a renderer, so the claim under
-  test is "this changed one field of the save and nothing else".
+- **Crash recovery** — if a render throws, a bilingual screen that says nothing
+  was lost and offers a retry and a way home, instead of the blank screen a
+  Release build would otherwise die on.
+- **Settings** — the language toggle (English/中文), the sound switch, which on
+  this client is the master switch for haptics too, and starting over. All three
+  transitions are exported as pure functions and tested without a renderer, so
+  the claim under test is "this changed one field of the save and nothing else".
 
-Not yet here: Google sign-in (the web client offers it; this one is PIN only),
-background refresh — the server is read on launch and on sign-in, not
-while the app is open — and the option to delete the save and start over. The
-web Settings page has that behind a confirmation; on a phone the same control
-would sit two taps from a child's thumb, and the album is the thing he has been
-collecting for weeks. `clearProfile()` exists in `GameContext` for sign-out, so
-the plumbing is there the day there is a good way to ask.
+  Starting over is the destructive one, so it is gated rather than offered. The
+  resting control is the quietest thing on the screen — small, grey, unfilled,
+  nothing about it inviting a tap — and all it can do is open a confirmation
+  that names the cost in both languages, with a red Delete beside a Back. The
+  gate itself is `nextReset`, a pure function of the current stage and the
+  press, which turns "only one sequence of presses can reach the save" into a
+  property `Settings.reset.test.ts` proves against a real profile rather than a
+  comment: a `delete` that never passed through the confirmation returns
+  `wipe: false` and does nothing at all. On a phone every control sits under a
+  child's thumb, and the album is what he has been collecting for weeks.
+
+  For a signed-in player it means _start over on this device_, never "erase my
+  account". The session is dropped first, which flushes anything still queued to
+  the server, so the last battle reaches the account before the phone forgets it
+  and the fresh profile sign-up creates a minute later is not pushed over the
+  old one. Only then is the device cleared, through `storage.ts` like every
+  other write. What reached the account is still there to sign back into; no
+  call on either client removes an account's copy, and `startOverPlan` says so
+  in a field a test can read.
+
+Not yet here: Google sign-in (the web client offers it; this one is PIN only)
+and background refresh — the server is read on launch and on sign-in, not while
+the app is open.
+
+The crash screen's erase is the other way back to a clean beginning, and it is
+deliberately shaped differently: unreachable until the app has actually broken,
+invisible until a retry has failed, and two taps and a named cost after that. It
+is a last resort a stuck child can be walked to. Settings is the door he can
+find on purpose.
 
 `mobile/scripts/audit_parity.py` checks that list against the web client: a
 screen or feature that exists there and not here has to be named in this

@@ -1,7 +1,8 @@
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { CrashBoundary } from './src/CrashBoundary';
 import { GameProvider, useGame } from './src/game/GameContext';
 import { Album } from './src/screens/Album';
 import { BattleScreen } from './src/screens/BattleScreen';
@@ -32,9 +33,8 @@ type Screen =
   | { name: 'settings' }
   | { name: 'signin' };
 
-function Router() {
+function Router({ screen, setScreen }: { screen: Screen; setScreen: (screen: Screen) => void }) {
   const { profile, loading } = useGame();
-  const [screen, setScreen] = useState<Screen>({ name: 'home' });
 
   if (loading) {
     return (
@@ -98,15 +98,35 @@ function Router() {
   }
 }
 
+/**
+ * Where the crash boundary sits, and why it sits there.
+ *
+ * Everything that can throw a game error is inside it: `GameProvider`, which
+ * reads and reconciles the save, and every screen, which render engine values.
+ * Only the safe-area layout and the status bar are outside, so the recovery
+ * screen still gets its insets and does not draw under the notch - and those
+ * two know nothing about the game, which is what makes them safe company.
+ *
+ * The current screen is held *here*, above the boundary, so that "try again"
+ * and "home" stay two different offers on a client with no URL: a retry
+ * remounts the subtree on the screen that crashed, while home resets the screen
+ * first. That mirrors the web, where `reset()` re-renders the crashed route and
+ * the Home link navigates away from it.
+ */
 export default function App() {
+  const [screen, setScreen] = useState<Screen>({ name: 'home' });
+  const goHome = useCallback(() => setScreen({ name: 'home' }), []);
+
   return (
     <SafeAreaProvider>
-      <GameProvider>
-        <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-          <StatusBar style="light" />
-          <Router />
-        </SafeAreaView>
-      </GameProvider>
+      <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+        <StatusBar style="light" />
+        <CrashBoundary onGoHome={goHome}>
+          <GameProvider>
+            <Router screen={screen} setScreen={setScreen} />
+          </GameProvider>
+        </CrashBoundary>
+      </SafeAreaView>
     </SafeAreaProvider>
   );
 }

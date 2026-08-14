@@ -66,6 +66,8 @@ export {
 
 export { MAX_CHARGE, type Move, movesFor } from '../../src/lib/game/moves';
 
+export { PROMPT_EM, promptFontSize, promptWidthEm } from '../../src/lib/game/prompt';
+
 export {
   CRIT_THRESHOLD,
   MAX_SPEED_BONUS,
@@ -98,5 +100,21 @@ export {
 } from '../../src/lib/game/progress';
 
 export { createRng } from '../../src/lib/game/rng';
+
+/**
+ * The crash-recovery rules, shared with the web client rather than re-decided
+ * here. `recoveryPlan` is what says the destructive option stays hidden until a
+ * retry has demonstrably failed, and that the two safe exits are never withheld
+ * - decisions about a child's save, not about a platform, so they cross the
+ * seam like any other rule. Both functions are pure and touch neither the DOM
+ * nor `localStorage`; `languageFromSave` takes the raw saved string precisely so
+ * the client can hand it whatever its own storage returns.
+ */
+export {
+  RETRIES_BEFORE_ERASE,
+  type RecoveryPlan,
+  languageFromSave,
+  recoveryPlan,
+} from '../../src/lib/recovery';
 
 export { STRINGS, type StringKey, t } from '../../src/lib/i18n';
