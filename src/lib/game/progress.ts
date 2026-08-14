@@ -669,8 +669,7 @@ function mergeEarned(base: Profile, other: Profile): Profile {
     problemsTotal === base.problemsTotal &&
     bestCombo === base.bestCombo &&
     streakBest === base.streak.best &&
-    createdAt === base.createdAt &&
-    false
+    createdAt === base.createdAt
   ) {
     return base;
   }

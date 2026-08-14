@@ -7,6 +7,7 @@ import {
   type Creature,
   type Element,
   type Profile,
+  creaturesByElement,
   getCreature,
 } from '../engine';
 import { useGame } from '../game/GameContext';
@@ -30,14 +31,25 @@ export type ElementGroup = { element: Element; creatures: Creature[] };
  * kind of bug that never gets reported. `Album.test.ts` walks this function.
  *
  * Elements with nothing in them are left out rather than given an empty header.
+ *
+ * "Which creatures are this element" is the engine's answer, not this screen's.
+ * It used to be `creatures.filter((c) => c.element === element)` here while the
+ * web album called `creaturesByElement` — the same answer today, and two
+ * different answers the moment that function grows a rule (an unreleased
+ * creature, a seasonal variant). The argument only narrows what the engine
+ * returns, so a creature that is not in the shared roster is not shown; the
+ * screen always passes the whole roster, and the tests pass subsets of it.
  */
 export function groupByElement(creatures: readonly Creature[] = CREATURES): ElementGroup[] {
   const groups: ElementGroup[] = [];
+  const included = new Set(creatures.map((creature) => creature.id));
 
   for (const element of ELEMENTS) {
-    // Filtering per element preserves roster order within a group, which keeps
-    // each evolution line reading root-first.
-    const members = creatures.filter((creature) => creature.element === element);
+    // Engine order inside a group, which keeps each evolution line reading
+    // root-first on both clients.
+    const members = creaturesByElement(element).filter((creature) =>
+      included.has(creature.id),
+    );
     if (members.length > 0) groups.push({ element, creatures: members });
   }
 

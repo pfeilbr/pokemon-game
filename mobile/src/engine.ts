@@ -8,15 +8,29 @@
  *
  * This file is the single place that knows the path across the directory
  * boundary; everything else in the app imports from here.
+ *
+ * The surface below is kept at least as wide as what the web client imports,
+ * even where no screen here uses a name yet. A rule the other client can reach
+ * and this one cannot is a fork waiting to happen: the screen that needs it
+ * writes its own instead, which is exactly how the album came to filter the
+ * roster by element by hand while the web album called `creaturesByElement`.
+ * `mobile/scripts/audit_parity.py` fails the build if the seam falls behind.
  */
 
-export { GRADIENT_REF, type Drawing, type Shape, drawCreature } from '../../src/lib/game/art';
+export {
+  GRADIENT_REF,
+  type Drawing,
+  type Gradient,
+  type Shape,
+  drawCreature,
+} from '../../src/lib/game/art';
 
 export {
   CREATURES,
   type ArtSpec,
   type Creature,
   availableAtLevel,
+  creaturesByElement,
   evolutionLine,
   findCreature,
   getCreature,
@@ -38,6 +52,7 @@ export {
 
 export {
   MAX_TIER,
+  SKILLS,
   SKILL_META,
   type Attempt,
   type Problem,

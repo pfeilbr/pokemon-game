@@ -43,13 +43,19 @@ Determinism
 Standard library only. No network of its own, no randomness. The plan, the
 per-step verdicts and the summary are emitted in workflow order - which is a
 property of `ci.yml`, not of this run - and every set-derived list (environment
-adaptations, skip reasons) is sorted. Durations are the one varying value: they
-appear in a separate right-hand column and `--no-timings` removes them, which
-makes the whole report byte-identical across runs.
+adaptations, skip reasons) is sorted. `--plan --no-timings` is byte-identical
+across runs; that is the deterministic core, and it is worth diffing.
 
-The one thing that cannot be deterministic is the *forwarded output of a failing
-tool*: a vitest or tsc diagnostic is theirs, not ours. Those are written to log
-files and echoed on failure, and they are clearly fenced as foreign output.
+Three things vary, and each is quarantined rather than denied:
+
+  1. **Durations.** One right-hand column, removed entirely by `--no-timings`.
+  2. **Two run-scoped temp paths** - the log directory and the parking
+     directory. Each is printed once, on its own labelled line, and never
+     interleaved with a verdict. They must be unique or two runs would collide.
+  3. **The forwarded output of a failing tool.** A vitest or tsc diagnostic is
+     theirs, not ours; claiming determinism for it would be a lie. It is
+     written to a log file, echoed inside an explicit fence, and run with
+     NO_COLOR so at least it diffs.
 
 Usage
 -----
@@ -311,7 +317,12 @@ def parse_yaml(text: str) -> Any:
 # rule means admitting, in the output, that a check is not being run.
 # ==========================================================================
 
-SHELL_OPERATORS = re.compile(r"[|;<>`]|\$\(")
+# Anything a shell would have to interpret: pipes, redirects, backgrounding,
+# globs, variable expansion, subshells. `&&` is the single exception, split and
+# run as two argv commands. Everything else is refused out loud rather than
+# passed to `shell=True`, where a failing first command in a pipeline hides
+# behind the exit status of the last one.
+SHELL_OPERATORS = re.compile(r"[|;<>`*$]|(?<!&)&(?!&)")
 
 # Matched against the step's command. Order is significant only for reporting.
 COMMAND_SKIPS: list[tuple[re.Pattern[str], str]] = [
@@ -424,6 +435,21 @@ def classify(steps: list[Step], opts: argparse.Namespace, db_url: str | None) ->
 
     for step in steps:
         wants_db = bool(step.env.get(DB_ENV_VAR))
+
+        # The workflow's env block is copied onto each step, but its
+        # TEST_DATABASE_URL names a *service container* - a host that exists
+        # only on the runner. Handing that value to a local vitest does not
+        # reproduce CI, it invents a failure: the integration tests stop
+        # skipping themselves and then cannot connect. (This harness did
+        # exactly that on its first full run, and reported 28 red tests that
+        # were nobody's fault but its own.) So: your database if you have one,
+        # nothing at all if you do not. An explicit empty override - the
+        # zero-config E2E step - is a deliberate instruction and is preserved.
+        if wants_db:
+            if db_url:
+                step.env[DB_ENV_VAR] = db_url
+            else:
+                del step.env[DB_ENV_VAR]
 
         if step.uses:
             step.decision = "SKIP"
@@ -783,7 +809,12 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--restore", action="store_true", help="repair an interrupted earlier run, then exit")
     parser.add_argument("--with-install", action="store_true", help="also run `npm ci` (destructive, needs network)")
     parser.add_argument("--stream", action="store_true", help="forward tool output live instead of on failure")
-    parser.add_argument("--no-timings", dest="timings", action="store_false", help="omit durations (byte-identical output)")
+    parser.add_argument(
+        "--no-timings",
+        dest="timings",
+        action="store_false",
+        help="omit durations; with --plan the output is then byte-identical run to run",
+    )
     parser.add_argument("--no-ci-env", dest="ci_env", action="store_false", help="do not set CI=true for the checks")
     parser.add_argument("--log-lines", type=int, default=60, help="lines of failing output to echo (default 60)")
     parser.add_argument("--only", action="append", default=[], metavar="TEXT", help="run only steps whose name contains TEXT")
@@ -967,7 +998,9 @@ def main(argv: list[str]) -> int:
 
     emit("")
     emit(BAR)
-    if exit_code == 0:
+    if exit_code == 0 and opts.only:
+        emit("FILTERED PASS - the steps you selected passed. This is NOT a preflight.")
+    elif exit_code == 0:
         emit("PREFLIGHT PASS - everything CI runs that can run here, ran and passed.")
     elif exit_code == 1:
         emit("PREFLIGHT FAIL - a check CI runs failed here. It would fail there too.")

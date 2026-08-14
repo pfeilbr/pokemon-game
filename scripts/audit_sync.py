@@ -504,7 +504,15 @@ async function offlineChecks() {
     { seed: 'offline', battles: 3, startMs: BASE_MS },
   );
 
-  const result = { storageKey: STORAGE_KEY, steps: [] };
+  const result = { storageKey: STORAGE_KEY, steps: [], unhandled: [] };
+
+  // A save that fires a request and forgets it does not throw where the caller
+  // can see it - it rejects into nothing and takes the process down. Recorded
+  // as a failed property rather than allowed to kill the harness, because
+  // "the checker crashed" reads as a broken checker, not as a broken promise.
+  process.on('unhandledRejection', (err) => {
+    result.unhandled.push(String((err && err.message) || err));
+  });
 
   const step = async (name, fn) => {
     try {
@@ -568,6 +576,9 @@ async function offlineChecks() {
 
   if (realFetch) globalThis.fetch = realFetch;
   delete globalThis.window;
+  // Let the microtask queue drain, so a promise dropped above is reported here
+  // rather than after stdout has already been written.
+  await new Promise((resolve) => setImmediate(resolve));
   return result;
 }
 
@@ -951,6 +962,16 @@ def main() -> int:
             violations.append(
                 f"local-play-is-never-gated: {entry['name']} -> {entry['detail']}"
             )
+    dropped = sorted(set(offline["unhandled"]))
+    print(f"  [{'ok ' if not dropped else 'BAD'}] "
+          f"{'requests started and forgotten':<44} "
+          f"{len(offline['unhandled'])} unhandled rejection(s)")
+    for message in dropped:
+        violations.append(
+            "local-play-is-never-gated: a storage call started a request and dropped "
+            f"the promise ({message}); an offline device would take the failure "
+            "somewhere no caller can catch it"
+        )
     source_level = ordering_violations()
     print(f"  [{'ok ' if not source_level else 'BAD'}] "
           f"{'call order in client.ts and GameProvider.tsx':<44} "

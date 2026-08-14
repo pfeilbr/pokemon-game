@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { type Page, expect, test } from '@playwright/test';
 import { createTrainer, playBattleToEnd } from './helpers';
 
 /**
@@ -125,6 +125,103 @@ test.describe('accounts', () => {
     await expect(other.getByTestId('badge-first-win')).toContainText(/First Victory/);
 
     await secondDevice.close();
+  });
+
+  /**
+   * The conflict the one-line last-write-wins rule used to lose.
+   *
+   * Two devices are both signed in. The laptop plays; then the tablet - which
+   * has not pulled since - only *toggles a setting*, which bumps `updatedAt` to
+   * now (`src/app/settings/page.tsx`) without earning anything, and pushes.
+   * Under a pure last-write-wins merge that stale save beat the laptop's
+   * battle, and the laptop's next sync deleted its own progress to match. The
+   * merge in `reconcile` keeps both sides' albums, badges and counters, so
+   * opening the laptop again brings everything back rather than throwing the
+   * newer work away.
+   *
+   * `scripts/audit_sync.py` sweeps this property over a corpus of divergent
+   * saves; this test is the same conflict through two real browser contexts,
+   * two real localStorages and the real API.
+   */
+  test('merges two devices instead of letting the last writer win', async ({ page, browser }) => {
+    const name = uniqueName('Merge');
+    const readProfile = (target: Page) =>
+      target.evaluate(async () => {
+        const response = await fetch('/api/profile', { cache: 'no-store' });
+        return (await response.json()).profile as {
+          xp: number;
+          caught: string[];
+          badges: string[];
+          battlesWon: number;
+          problemsCorrect: number;
+        };
+      });
+
+    // The tablet: sign up, then play a battle so there is something to lose.
+    await createTrainer(page, name, 'cindik');
+    await page.goto('/login');
+    await page.getByLabel(/what's your trainer name/i).fill(name);
+    await page.getByLabel(/4-digit pin/i).fill('1234');
+    await page.getByTestId('submit-login').click();
+    await expect(page).toHaveURL(/\/$/);
+
+    await page.getByTestId('tile-play').click();
+    await page.locator('[data-testid^="opponent-"]').first().click();
+    await playBattleToEnd(page);
+    await page.getByRole('button', { name: /^home$/i }).click();
+    await expect(page.getByTestId('sync-status')).toContainText(/saved to your account/i);
+    await page.waitForTimeout(2500);
+
+    // The laptop: a genuinely separate client. It signs in, picks up the
+    // tablet's save, and plays a battle of its own.
+    const laptopContext = await browser.newContext();
+    const laptop = await laptopContext.newPage();
+    await laptop.goto('/login');
+    await laptop.getByRole('button', { name: /already have an account/i }).click();
+    await laptop.getByLabel(/what's your trainer name/i).fill(name);
+    await laptop.getByLabel(/4-digit pin/i).fill('1234');
+    await laptop.getByTestId('submit-login').click();
+    await expect(laptop).toHaveURL(/\/$/);
+
+    await laptop.getByTestId('tile-play').click();
+    await laptop.locator('[data-testid^="opponent-"]').first().click();
+    await playBattleToEnd(laptop);
+    await laptop.getByRole('button', { name: /^home$/i }).click();
+    await expect(laptop.getByTestId('sync-status')).toContainText(/saved to your account/i);
+    await laptop.waitForTimeout(2500);
+
+    const afterLaptop = await readProfile(laptop);
+    expect(afterLaptop.battlesWon).toBe(2);
+
+    // The tablet has been sitting open all this time and never pulled. All it
+    // does is flip the sound off - and that alone used to cost the laptop its
+    // battle, because it makes the tablet's older save the newer write.
+    await page.goto('/settings');
+    await page.getByTestId('toggle-sound').click();
+    await page.waitForTimeout(2500);
+
+    // Opening the laptop again reconciles. Nothing either device earned is gone.
+    await laptop.goto('/');
+    await expect(laptop.getByTestId('sync-status')).toContainText(/saved to your account/i);
+    await laptop.waitForTimeout(2500);
+
+    const merged = await readProfile(laptop);
+    expect(merged.battlesWon).toBeGreaterThanOrEqual(afterLaptop.battlesWon);
+    expect(merged.xp).toBeGreaterThanOrEqual(afterLaptop.xp);
+    expect(merged.problemsCorrect).toBeGreaterThanOrEqual(afterLaptop.problemsCorrect);
+    expect(merged.caught).toEqual(expect.arrayContaining(afterLaptop.caught));
+    expect(merged.badges).toEqual(expect.arrayContaining(afterLaptop.badges));
+
+    // And the tablet agrees the next time it is opened: one album, both devices.
+    await page.goto('/');
+    await expect(page.getByTestId('sync-status')).toContainText(/saved to your account/i);
+    await page.waitForTimeout(2500);
+    const onTablet = await readProfile(page);
+    expect(onTablet.battlesWon).toBe(merged.battlesWon);
+    expect(onTablet.caught).toEqual(expect.arrayContaining(merged.caught));
+    expect(onTablet.badges).toEqual(expect.arrayContaining(merged.badges));
+
+    await laptopContext.close();
   });
 
   test('signing out returns to local-only saving without losing the profile', async ({ page }) => {

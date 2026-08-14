@@ -181,5 +181,14 @@ The game is complete and playable on the device:
   test is "this changed one field of the save and nothing else".
 
 Not yet here: Google sign-in (the web client offers it; this one is PIN only),
-and background refresh — the server is read on launch and on sign-in, not
-while the app is open.
+background refresh — the server is read on launch and on sign-in, not
+while the app is open — and the option to delete the save and start over. The
+web Settings page has that behind a confirmation; on a phone the same control
+would sit two taps from a child's thumb, and the album is the thing he has been
+collecting for weeks. `clearProfile()` exists in `GameContext` for sign-out, so
+the plumbing is there the day there is a good way to ask.
+
+`mobile/scripts/audit_parity.py` checks that list against the web client: a
+screen or feature that exists there and not here has to be named in this
+paragraph, or the audit fails. A gap is allowed to be a decision; it is not
+allowed to be an accident.

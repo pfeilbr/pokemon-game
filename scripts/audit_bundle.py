@@ -105,11 +105,19 @@ never shown - so the ordering is stable for identical bytes without putting a
 churning token in the output. Absolute paths, the build id and the emitted
 directory names are likewise never printed.
 
-The one honest caveat: gzipped sizes come from the local zlib, and a different
-zlib build can differ by a handful of bytes on the same input. Two runs on one
-machine against one build are byte-identical - `cmp` proves it - but the last
-digit of a gzip figure is not a cross-machine constant. Every budget's headroom
-is four orders of magnitude larger than that, so it cannot decide a verdict.
+Two honest caveats, neither of which can decide a verdict:
+
+- Gzipped sizes come from the local zlib, and a different zlib build can differ
+  by a handful of bytes on the same input. Two runs on one machine against one
+  build are byte-identical - `cmp` proves it - but the last digit of a gzip
+  figure is not a cross-machine constant.
+- The prerendered documents embed the build id, which is new on every build. So
+  rebuilding *identical source* moves the document's compressed size by a byte
+  or three, and with it the cold-transfer total. The chunk sizes do not move;
+  only the HTML does.
+
+Both are single-digit byte effects against budget headroom of twelve to thirteen
+thousand bytes.
 
 Note on shelling out: `npm run build` is an explicit argv list whose return code
 is checked directly. Nothing is piped through `head`/`tail`; a pipeline reports
@@ -139,7 +147,7 @@ REPO = Path(__file__).resolve().parent.parent
 #
 # How the ceilings below were chosen, once, on purpose:
 #
-# The headroom is deliberately NARROW - roughly 9% on the transfer numbers -
+# The headroom is deliberately NARROW - roughly 8% on the transfer numbers -
 # and the reason is the failure this script exists to catch. The regression is
 # "someone imported a library". So the headroom has to be smaller than the
 # smallest library anybody plausibly imports by accident, or the check cannot
@@ -149,7 +157,7 @@ REPO = Path(__file__).resolve().parent.parent
 #     framer-motion       ~35 KB      lodash            ~25 KB
 #     date-fns (broad)    ~20 KB      axios             ~13 KB
 #
-# ~14 KB of headroom on first-load JS trips every one of those. It is also more
+# ~13 KB of headroom on first-load JS trips every one of those. It is also more
 # than a normal change costs here: the heaviest single route's own code, on top
 # of the shared baseline, is under 20 KB gzipped for the entire battle screen,
 # and most routes cost 7-8 KB. So ordinary feature work fits, and a library does
@@ -185,11 +193,11 @@ BUDGETS: tuple[Budget, ...] = (
     Budget(
         key="route-first-load-js",
         limit=180_000,
-        measured=165_822,
+        measured=166_552,
         unit="gzip",
         what="heaviest route's first-load JavaScript, gzipped",
         why=(
-            "The number that decides whether the game starts. 14,178 bytes of "
+            "The number that decides whether the game starts. 13,448 bytes of "
             "headroom: under every library listed above, over any single "
             "screen's worth of app code."
         ),
@@ -197,20 +205,20 @@ BUDGETS: tuple[Budget, ...] = (
     Budget(
         key="shared-baseline-js",
         limit=160_000,
-        measured=146_879,
+        measured=147_614,
         unit="gzip",
         what="chunks every navigable route loads, gzipped",
         why=(
             "React and the Next.js client runtime. This is the floor under "
             "every page, so growth here is paid on every single visit rather "
-            "than by one screen. It should be near-constant; 13,121 bytes of "
+            "than by one screen. It should be near-constant; 12,386 bytes of "
             "headroom covers a framework point release, not a new dependency."
         ),
     ),
     Budget(
         key="route-cold-transfer",
         limit=192_000,
-        measured=176_434,
+        measured=177_976,
         unit="gzip",
         what="heaviest route's whole cold visit (HTML + CSS + JS + icon), gzipped",
         why=(
@@ -222,14 +230,14 @@ BUDGETS: tuple[Budget, ...] = (
     Budget(
         key="emitted-client-assets",
         limit=880_000,
-        measured=787_695,
+        measured=790_154,
         unit="raw",
         what="every client asset the build emitted, uncompressed",
         why=(
             "First load is not the whole story: a chunk fetched on navigation "
             "to /album is still weight a child waits for, and it never appears "
             "in a first-load figure. Raw rather than gzipped because this is "
-            "about what the device parses and caches. A wider band (11.7%) "
+            "about what the device parses and caches. A wider band (11.4%) "
             "because it is a coarser guard than the transfer numbers."
         ),
     ),
@@ -865,10 +873,12 @@ def render(
         for note in sorted(set(media_notes)):
             add(f"  {note}")
         add("")
-        add("  Only the bundle root is budgeted. The files served verbatim are")
-        add("  hand-written, and scripts/audit_assets.py already checks each of")
-        add("  them by name, size and content - counting them here as well would")
-        add("  make the budgeted total disagree with the census above it.")
+        add("  Every root above is checked for media; only the bundle root is")
+        add("  budgeted. What the host serves verbatim is either hand-written -")
+        add("  and scripts/audit_assets.py already checks those by name, size")
+        add("  and content - or, in the static shape, the prerendered documents")
+        add("  already counted per route above. Weighing them here as well would")
+        add("  make the budgeted total disagree with the census beside it.")
         add("")
 
     add("-" * WIDTH)

@@ -2,9 +2,9 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   BADGES,
   MAX_TIER,
+  SKILLS,
   SKILL_META,
   type Profile,
-  type Skill,
   accuracyOf,
   averageSeconds,
   overallAccuracy,
@@ -24,9 +24,12 @@ export function ProgressScreen({ profile, onBack }: { profile: Profile; onBack: 
   const { language, tr } = useGame();
 
   const earned = new Set(profile.badges);
-  const practised = (Object.keys(profile.skillStats) as Skill[]).filter(
-    (skill) => (profile.skillStats[skill]?.attempts ?? 0) > 0,
-  );
+  // Walked in the engine's own order, exactly as the web progress page does.
+  // Reading the keys off the save instead put the rows in whatever order the
+  // JSON happened to carry - which differs between a save made on this client,
+  // one synced from the web, and one repaired by `normaliseProfile` - so the
+  // same child could see his skills in two different orders on two devices.
+  const practised = SKILLS.filter((skill) => (profile.skillStats[skill]?.attempts ?? 0) > 0);
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
