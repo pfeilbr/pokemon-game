@@ -140,9 +140,10 @@ SCREENS=(
 
 # Cold start: Metro is not involved (Release embeds the bundle), but the JS
 # still has to boot, read the save and render.
+# Also what a deep link costs now: `navigate` terminates before `openurl` so
+# iOS does not put a confirmation dialog over the screen, which makes every
+# navigation a cold start too.
 LAUNCH_SETTLE_SECONDS=12
-# A deep link is a setState on an app that is already warm.
-NAVIGATE_SETTLE_SECONDS=3
 # Screens that animate in (the hit shake, the speed meter) can be caught
 # mid-frame, and a cold simulator occasionally needs longer than the settle
 # above. Re-screenshot rather than sleeping longer for everyone. Kept low
@@ -320,8 +321,21 @@ capture() {
 
 navigate() {
   local path="$1"
+  # `openurl` against a RUNNING app makes iOS put up an "Open in <app>?"
+  # confirmation, and that dialog sits over the screen being photographed. On
+  # the first real run it covered the dashboard's whole stat row, so the OCR
+  # assertion for "Maths level" failed on a screen that had otherwise rendered
+  # perfectly - Hello Leo, Blazur, Lv 6 and 200/260 were all there. The picture
+  # was wrong, not the app.
+  #
+  # Terminating first turns the same call into a cold launch carrying the URL,
+  # which iOS delivers to `Linking.getInitialURL()` with no prompt at all. It
+  # costs one launch per screen; a system dialog in every screenshot costs the
+  # entire record. Settle for a launch rather than a transition, because that is
+  # now what this is.
+  xcrun simctl terminate "$UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
   xcrun simctl openurl "$UDID" "$SCHEME://$path"
-  sleep "$NAVIGATE_SETTLE_SECONDS"
+  sleep "$LAUNCH_SETTLE_SECONDS"
 }
 
 # ---------------------------------------------------------------------------
