@@ -9,17 +9,19 @@ import {
   useRef,
   useState,
 } from 'react';
+import { AppState } from 'react-native';
 import {
   type AuthFailure,
   type SessionInfo,
-  fetchRemoteProfile,
+  fetchRemoteSave,
   fetchSession,
   pushRemoteProfile,
   signInWithPin,
   signOut as signOutRemote,
 } from '../api';
-import { type Language, type Profile, type StringKey, reconcile, t } from '../engine';
+import { type Language, type Profile, type StringKey, t } from '../engine';
 import { clearProfile, loadProfile, saveProfile } from '../storage';
+import { type AppPhase, applyRemoteSave, planRefresh } from './refresh';
 
 /**
  * Game state for the whole app.
@@ -75,6 +77,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const pendingSync = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef<Profile | null>(null);
   const signedIn = useRef(false);
+  /** When the server last answered, so a foreground can decide it is too soon. */
+  const lastPullAt = useRef<number | null>(null);
 
   /**
    * Writes to the device first, then schedules the server.
@@ -96,24 +100,47 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setSyncState('saving');
     if (pendingSync.current) clearTimeout(pendingSync.current);
     pendingSync.current = setTimeout(() => {
+      // Cleared as the timer fires, not only when it is replaced: `planRefresh`
+      // reads this handle to answer "is this device still holding changes the
+      // server has not heard?", and a stale handle would answer yes forever.
+      pendingSync.current = null;
       const toPush = latest.current;
       if (!toPush) return;
       void pushRemoteProfile(toPush).then((ok) => setSyncState(ok ? 'saved' : 'error'));
     }, SYNC_DEBOUNCE_MS);
   }, []);
 
-  /** Merges the server's save with this device's, newest wins. */
-  const merge = useCallback(async () => {
-    const remote = await fetchRemoteProfile();
-    const winner = reconcile(latest.current, remote);
-    if (!winner) return;
+  /**
+   * Reads the server and folds it into the device save.
+   *
+   * The deciding is not done here: `applyRemoteSave` asks the shared
+   * `reconcile` and hands back what changed, so this function only carries out
+   * the answer. Note what it does *not* do - it writes the device through
+   * `saveProfile` rather than through `persist`, so a pull cannot arm the
+   * debounced push. That is the loop guard; the only push a pull can cause is
+   * the explicit one below, and only when the server is genuinely behind.
+   *
+   * A miss returns before touching anything at all, including `syncState`. On a
+   * flat network the child sees exactly what he saw a moment ago.
+   */
+  const pull = useCallback(async () => {
+    const remote = await fetchRemoteSave();
+    const answered = remote.kind !== 'unavailable';
+    // The interval only restarts when the server actually answered. A miss must
+    // not buy itself a minute of not trying again.
+    if (answered) lastPullAt.current = Date.now();
 
-    setProfileState(winner);
-    latest.current = winner;
-    void saveProfile(winner);
+    const outcome = applyRemoteSave(latest.current, remote);
+    if (!outcome.profile) return;
+
+    if (outcome.writeDevice) {
+      setProfileState(outcome.profile);
+      latest.current = outcome.profile;
+      void saveProfile(outcome.profile);
+    }
     // If the device was ahead, the server is the one that needs catching up.
-    if (winner !== remote) void pushRemoteProfile(winner);
-    setSyncState('saved');
+    if (outcome.pushBack) void pushRemoteProfile(outcome.profile);
+    if (answered) setSyncState('saved');
   }, []);
 
   // Read the device save first and start playing; ask the server afterwards.
@@ -133,13 +160,47 @@ export function GameProvider({ children }: { children: ReactNode }) {
       if (cancelled || status.kind !== 'reachable') return;
       setSession(status.session);
       signedIn.current = status.session.signedIn;
-      if (status.session.signedIn) await merge();
+      if (status.session.signedIn) await pull();
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [merge]);
+  }, [pull]);
+
+  /**
+   * Coming back to the app reads the server again.
+   *
+   * Without this the server is read on launch and on sign-in and never again,
+   * and a React Native app is one process that can live for weeks - so a child
+   * who played on the laptop and then picked up a long-backgrounded iPad saw
+   * the album as it stood that morning, with no way out but force-quitting.
+   *
+   * Every decision about whether to ask is in `planRefresh`, which is pure and
+   * tested without a renderer. This handler owns only the two things it alone
+   * knows: which phase the app was in a moment ago, and what the clock says.
+   */
+  useEffect(() => {
+    // The provider mounts while the app is on screen, and launch has just read
+    // the server, so the first phase worth reacting to is a *return*.
+    let phase: AppPhase = 'active';
+
+    const subscription = AppState.addEventListener('change', (next) => {
+      const previous = phase;
+      phase = next;
+      const plan = planRefresh({
+        previous,
+        next,
+        signedIn: signedIn.current,
+        lastPullAt: lastPullAt.current,
+        now: Date.now(),
+        pushQueued: pendingSync.current !== null,
+      });
+      if (plan.pull) void pull();
+    });
+
+    return () => subscription.remove();
+  }, [pull]);
 
   useEffect(
     () => () => {
@@ -186,10 +247,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
       signedIn.current = true;
       const status = await fetchSession();
       if (status.kind === 'reachable') setSession(status.session);
-      await merge();
+      await pull();
       return { ok: true };
     },
-    [merge],
+    [pull],
   );
 
   const signOut = useCallback(async () => {

@@ -39,15 +39,16 @@ onto `react-native-svg` in a 45-line switch. The web client's renderer is the
 same switch against inline `<svg>`. Adding a creature or a new crown shape lands
 on both clients with no port and no image.
 
-Four things genuinely could not cross, and each is a substitution for a
+Five things genuinely could not cross, and each is a substitution for a
 platform API rather than a fork of a rule:
 
-| Web                      | iOS                            | Why                                                                                                                                                                                     |
-| ------------------------ | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `localStorage`           | `AsyncStorage`                 | Same key, same `normaliseProfile` repair at the boundary.                                                                                                                               |
-| Web Audio cues           | Taptic Engine (`expo-haptics`) | Reads better in one hand, and needs no audio assets — the no-bundled-media property survives.                                                                                           |
-| `prefers-reduced-motion` | `AccessibilityInfo`            | iOS does not honour it for free; the hit shake asks explicitly.                                                                                                                         |
-| a URL per screen         | `Linking`                      | The web has an address bar; this client has a `switch`. `simctl` can open a URL but cannot tap, so the screenshot harness needs one way in. It selects a screen and can carry no state. |
+| Web                      | iOS                            | Why                                                                                                                                                                                                                                                                |
+| ------------------------ | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `localStorage`           | `AsyncStorage`                 | Same key, same `normaliseProfile` repair at the boundary.                                                                                                                                                                                                          |
+| Web Audio cues           | Taptic Engine (`expo-haptics`) | Reads better in one hand, and needs no audio assets — the no-bundled-media property survives.                                                                                                                                                                      |
+| `prefers-reduced-motion` | `AccessibilityInfo`            | iOS does not honour it for free; the hit shake asks explicitly.                                                                                                                                                                                                    |
+| a URL per screen         | `Linking`                      | The web has an address bar; this client has a `switch`. `simctl` can open a URL but cannot tap, so the screenshot harness needs one way in. It selects a screen and can carry no state.                                                                            |
+| `visibilitychange`       | `AppState`                     | The web's answer to "is the player back?" is a tab that was hidden, and a browser re-reads the server on every page load anyway. This client is one process that can live for weeks between launches, so the return to the foreground is the only signal there is. |
 
 Navigation is a `switch` in `App.tsx`, not React Navigation. Eight screens, one
 deep link (`mathmon://screen/<name>`, which the screenshot harness drives and
@@ -122,6 +123,46 @@ last-write-wins on `updatedAt` for mutable state, so playing offline on the
 phone can never cost him what he caught on the laptop. The
 session is an httpOnly cookie; React Native's fetch uses the platform cookie
 store, so this client never sees or stores a credential itself.
+
+### Coming back to the app
+
+The server is read on launch, on sign-in, **and when the app returns to the
+foreground**. A browser tab reloads; this app does not. It is one process that
+can live for weeks, so without the third of those a child who played on the
+laptop and then picked up an iPad that had been backgrounded since breakfast saw
+the album as it stood at breakfast. Force-quitting fixed it, which a
+seven-year-old will not think to do — and a stale album does not look stale to
+him, it looks like his creatures are gone.
+
+The refresh is subordinate to the promise above it in every direction:
+
+- **It cannot gate play.** Nothing waits on it, nothing spins, and no screen is
+  blocked. A pull that fails changes nothing and says nothing — not a message,
+  not even the sync indicator. On a train it is indistinguishable from never
+  having asked.
+- **It merges, it never replaces.** The answer comes from the shared
+  `reconcile`, through `src/engine.ts`, so this client cannot drift from the
+  web client on the one question that costs a child his album.
+- **A local-only player issues no requests at all.** Not a cheap one, not a
+  failed one. That is what keeps an account an upgrade.
+- **At most one read a minute.** A child flicking between apps should not fire a
+  request per switch; the floor is time since the server last answered, so a
+  burst of switching costs one request. Sixty seconds is short against the thing
+  it guards — a session on another device — and long against `SYNC_DEBOUNCE_MS`,
+  which is 1.2 seconds, so a refresh can never be a meaningful share of what a
+  battle already sends.
+- **It does not fight the debounced push.** A queued push means _this_ device is
+  the one that is ahead, so the refresh stands down and lets it land; and a pull
+  writes the device directly rather than through `persist`, so it cannot arm a
+  push of its own. The push-back after a merge is gated on the server not
+  already holding that save, which is what makes two devices converge in one
+  round each and then go quiet instead of pushing at each other forever.
+
+Both halves — whether to ask, and what the answer means — are pure functions in
+`src/game/refresh.ts`, tested in `src/game/refresh.test.ts` without a renderer,
+against a real save through the real `storage.ts`. The claims under test are
+that a failed or timed-out pull leaves the bytes on the device identical, and
+that a successful one keeps what only the phone had caught.
 
 The base URL is build-time configuration, never hardcoded:
 
@@ -263,7 +304,8 @@ The game is complete and playable on the device:
 
 - **Sign-up** — trainer name, then the twelve starters on their own screen.
 - **Accounts** — optional name + PIN sign-in from Settings, mirroring progress
-  to the same server the web client uses.
+  to the same server the web client uses, and re-reading it whenever the app
+  comes back to the foreground so the album is never a device behind.
 - **Dashboard** — partner in its current evolved form, XP bar, maths level,
   day streak, album completion.
 - **Opponent choice** — three level-appropriate opponents, each labelled with
@@ -301,9 +343,7 @@ The game is complete and playable on the device:
   call on either client removes an account's copy, and `startOverPlan` says so
   in a field a test can read.
 
-Not yet here: Google sign-in (the web client offers it; this one is PIN only)
-and background refresh — the server is read on launch and on sign-in, not while
-the app is open.
+Not yet here: Google sign-in (the web client offers it; this one is PIN only).
 
 The crash screen's erase is the other way back to a clean beginning, and it is
 deliberately shaped differently: unreachable until the app has actually broken,

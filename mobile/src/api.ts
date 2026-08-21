@@ -158,24 +158,65 @@ export async function signOut(baseUrl = API_BASE_URL): Promise<void> {
 }
 
 /**
- * The profile the server holds, or null.
+ * What the server had, or why this client does not know.
+ *
+ * The three cases are kept apart because two of them call for opposite
+ * reactions and the third for none at all:
+ *
+ * - `profile` - a save to reconcile against.
+ * - `none` - reached the server, and this account has no save yet. The device
+ *   holds the only copy, so the server is the side that is behind.
+ * - `unavailable` - no answer: offline, timed out, or the deployment has no
+ *   database. Nothing is known, so nothing should happen and nothing should be
+ *   said.
+ *
+ * Collapsing `none` and `unavailable` into one `null`, which is all
+ * `fetchRemoteProfile` below can express, is harmless on launch - there is
+ * nothing on the device yet worth protecting - but not on a foreground
+ * refresh, where it would turn a flat network into an upload attempt every
+ * time the app is opened.
+ */
+export type RemoteSave =
+  | { kind: 'profile'; profile: Profile }
+  | { kind: 'none' }
+  | { kind: 'unavailable'; reason: string };
+
+/**
+ * Reads the profile the server holds.
  *
  * Normalised on arrival: the server is trusted to be the server, not to be
  * running the same version of the game as this phone.
  */
-export async function fetchRemoteProfile(baseUrl = API_BASE_URL): Promise<Profile | null> {
-  if (!baseUrl) return null;
+export async function fetchRemoteSave(baseUrl = API_BASE_URL): Promise<RemoteSave> {
+  if (!baseUrl) return { kind: 'unavailable', reason: 'not configured' };
 
   const result = await request(baseUrl, '/api/profile');
-  if ('error' in result || !result.response.ok) return null;
+  if ('error' in result) return { kind: 'unavailable', reason: result.error };
   const { response } = result;
+  if (!response.ok) return { kind: 'unavailable', reason: `HTTP ${response.status}` };
 
+  let body: { profile?: unknown };
   try {
-    const body = (await response.json()) as { profile?: unknown };
-    return normaliseProfile(body.profile);
+    body = (await response.json()) as { profile?: unknown };
   } catch {
-    return null;
+    return { kind: 'unavailable', reason: 'unexpected response shape' };
   }
+
+  // `normaliseProfile` returns null for anything that is not an object, which
+  // is what an account with no save stored looks like on the wire.
+  const profile = normaliseProfile(body.profile);
+  return profile === null ? { kind: 'none' } : { kind: 'profile', profile };
+}
+
+/**
+ * The profile the server holds, or null.
+ *
+ * The flattened form of `fetchRemoteSave`, kept for the callers that genuinely
+ * cannot act on the difference.
+ */
+export async function fetchRemoteProfile(baseUrl = API_BASE_URL): Promise<Profile | null> {
+  const save = await fetchRemoteSave(baseUrl);
+  return save.kind === 'profile' ? save.profile : null;
 }
 
 /** Mirrors the device's save to the server. Returns whether it landed. */
