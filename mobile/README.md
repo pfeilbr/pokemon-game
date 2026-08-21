@@ -39,7 +39,7 @@ onto `react-native-svg` in a 45-line switch. The web client's renderer is the
 same switch against inline `<svg>`. Adding a creature or a new crown shape lands
 on both clients with no port and no image.
 
-Five things genuinely could not cross, and each is a substitution for a
+Four things genuinely could not cross, and each is a substitution for a
 platform API rather than a fork of a rule:
 
 | Web                      | iOS                            | Why                                                                                                                                                                                                                                                                |
@@ -47,14 +47,20 @@ platform API rather than a fork of a rule:
 | `localStorage`           | `AsyncStorage`                 | Same key, same `normaliseProfile` repair at the boundary.                                                                                                                                                                                                          |
 | Web Audio cues           | Taptic Engine (`expo-haptics`) | Reads better in one hand, and needs no audio assets — the no-bundled-media property survives.                                                                                                                                                                      |
 | `prefers-reduced-motion` | `AccessibilityInfo`            | iOS does not honour it for free; the hit shake asks explicitly.                                                                                                                                                                                                    |
-| a URL per screen         | `Linking`                      | The web has an address bar; this client has a `switch`. `simctl` can open a URL but cannot tap, so the screenshot harness needs one way in. It selects a screen and can carry no state.                                                                            |
 | `visibilitychange`       | `AppState`                     | The web's answer to "is the player back?" is a tab that was hidden, and a browser re-reads the server on every page load anyway. This client is one process that can live for weeks between launches, so the return to the foreground is the only signal there is. |
 
-Navigation is a `switch` in `App.tsx`, not React Navigation. Eight screens, one
-deep link (`mathmon://screen/<name>`, which the screenshot harness drives and
-which can do nothing a button cannot), no back stack worth preserving — a
-navigation library would add two
+Navigation is a `switch` in `App.tsx`, not React Navigation. Eight screens, no
+deep links, no back stack worth preserving — a navigation library would add two
 more native modules to the iOS build to replace ten lines.
+
+There was briefly a `mathmon://screen/<name>` link, added so the screenshot
+harness could reach a screen. The runner disproved it: iOS confirms a
+custom-scheme open with a dialog and waits for a tap `simctl` cannot perform, so
+two CI runs photographed **"Open in Mathmon?"** — once over the dashboard, once
+over the home screen. The harness now writes `SCREEN_KEY` into the app's own
+storage beside the seeded save, which is both the mechanism already proven to
+work and the smaller hook: a URL handler is reachable by any app or web page on
+the device, a key this app only ever reads is not.
 
 ### When the game trips over
 

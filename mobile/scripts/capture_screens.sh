@@ -111,18 +111,18 @@ SCREENS=(
   # "Hello, Leo" and "Blazur" are the two strings that prove the seed landed
   # *and* the shared engine ran: the fixture stores starterId cindik and 900 xp,
   # and only `partnerFor` turns that into the stage-2 Blazur.
-  "02-dashboard|played-en|screen/home|Hello, Leo|Blazur|Maths level"
-  "03-choose-opponent|played-en|screen/pick|Choose your opponent|Type chart"
+  "02-dashboard|played-en|home|Hello, Leo|Blazur|Maths level"
+  "03-choose-opponent|played-en|pick|Choose your opponent|Type chart"
   # Asserting the opponent's name proves the deep link's parameter was honoured
   # rather than a default fight being started.
-  "04-battle|played-en|screen/battle?opponent=vinari|wild creature appeared|Pick your move|Vinari"
-  "05-album|played-en|screen/album|Creature album|Ember"
+  "04-battle|played-en|battle:vinari|wild creature appeared|Pick your move|Vinari"
+  "05-album|played-en|album|Creature album|Ember"
   # Only strings from the top of each ScrollView: `simctl` photographs the
   # visible frame, so an assertion on something below the fold would be a test
   # about scroll position rather than about the screen.
-  "06-progress|played-en|screen/progress|Your progress|Maths skills"
-  "07-settings|played-en|screen/settings|Settings|Language|Sound"
-  "08-sign-in|played-en|screen/signin|Sign in to save|4-digit PIN"
+  "06-progress|played-en|progress|Your progress|Maths skills"
+  "07-settings|played-en|settings|Settings|Language|Sound"
+  "08-sign-in|played-en|signin|Sign in to save|4-digit PIN"
   # The Chinese pair is seeded from a profile identical to the English one
   # except for settings.language, which is what makes P5 (no two captures are
   # the same picture) a real check on the translation: if the language never
@@ -134,8 +134,8 @@ SCREENS=(
   # records why the smaller Chinese strings are left out: Vision reads a 13pt
   # 小火星 as "JKE" often enough that asserting it would be a flaky test about
   # OCR rather than a real one about the app.
-  "09-chinese-dashboard|played-zh|screen/home|数学宝贝对战联盟"
-  "10-chinese-album|played-zh|screen/album|伙伴图鉴"
+  "09-chinese-dashboard|played-zh|home|数学宝贝对战联盟"
+  "10-chinese-album|played-zh|album|伙伴图鉴"
 )
 
 # Cold start: Metro is not involved (Release embeds the bundle), but the JS
@@ -191,9 +191,9 @@ STORAGE_KEY="$(sed -nE "s/^export const STORAGE_KEY = '(.+)';[[:space:]]*$/\1/p"
   "$MOBILE_DIR/src/storage.ts" | head -1)"
 [ -n "$STORAGE_KEY" ] || die "could not parse STORAGE_KEY out of mobile/src/storage.ts"
 
-SCHEME="$(sed -nE 's/^[[:space:]]*"scheme":[[:space:]]*"([^"]+)".*$/\1/p' \
-  "$MOBILE_DIR/app.json" | head -1)"
-[ -n "$SCHEME" ] || die "could not parse the URL scheme out of mobile/app.json"
+SCREEN_KEY="$(sed -nE "s/^export const SCREEN_KEY = '(.+)';[[:space:]]*$/\1/p" \
+  "$MOBILE_DIR/src/storage.ts" | head -1)"
+[ -n "$SCREEN_KEY" ] || die "could not parse SCREEN_KEY out of mobile/src/storage.ts"
 
 # The same save the web screenshots are taken from (PLAYED_PROFILE in
 # e2e/screenshots.spec.ts), so the two records show one game part-way through
@@ -208,7 +208,7 @@ mkdir -p "$OUT_DIR"
 note "app          $APP"
 note "bundle id    $BUNDLE_ID"
 note "simulator    $UDID"
-note "scheme       $SCHEME://"
+note "screen key   $SCREEN_KEY"
 note "storage key  $STORAGE_KEY"
 note "output       $OUT_DIR"
 
@@ -256,7 +256,21 @@ seed_profile() {
 
   mkdir -p "$dir"
   cp "$json" "$dir/$hashed"
-  printf '{"%s":null}' "$STORAGE_KEY" >"$dir/manifest.json"
+
+  # The screen rides along in the same store rather than arriving as a deep
+  # link. `simctl openurl` cannot work here: iOS confirms a custom-scheme open
+  # with a dialog and waits for a tap simctl cannot perform, so two CI runs
+  # photographed "Open in Mathmon?" - once over the dashboard, once over the
+  # home screen after the app had been terminated.
+  local screen_hashed
+  screen_hashed="$(printf '%s' "$SCREEN_KEY" | md5 -q)"
+  if [ -n "${2-}" ]; then
+    printf '%s' "$2" >"$dir/$screen_hashed"
+    printf '{"%s":null,"%s":null}' "$STORAGE_KEY" "$SCREEN_KEY" >"$dir/manifest.json"
+  else
+    rm -f "$dir/$screen_hashed"
+    printf '{"%s":null}' "$STORAGE_KEY" >"$dir/manifest.json"
+  fi
 }
 
 launch_app() {
@@ -319,23 +333,13 @@ capture() {
   exit 1
 }
 
+# A screen change is a reseed and a relaunch. There is no in-app navigation the
+# harness can drive, and that is deliberate: the app reads SCREEN_KEY once at
+# startup and never again, so nothing about this is reachable at runtime.
 navigate() {
-  local path="$1"
-  # `openurl` against a RUNNING app makes iOS put up an "Open in <app>?"
-  # confirmation, and that dialog sits over the screen being photographed. On
-  # the first real run it covered the dashboard's whole stat row, so the OCR
-  # assertion for "Maths level" failed on a screen that had otherwise rendered
-  # perfectly - Hello Leo, Blazur, Lv 6 and 200/260 were all there. The picture
-  # was wrong, not the app.
-  #
-  # Terminating first turns the same call into a cold launch carrying the URL,
-  # which iOS delivers to `Linking.getInitialURL()` with no prompt at all. It
-  # costs one launch per screen; a system dialog in every screenshot costs the
-  # entire record. Settle for a launch rather than a transition, because that is
-  # now what this is.
-  xcrun simctl terminate "$UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
-  xcrun simctl openurl "$UDID" "$SCHEME://$path"
-  sleep "$LAUNCH_SETTLE_SECONDS"
+  local screen="$1"
+  seed_profile "$CURRENT_FIXTURE" "$screen"
+  launch_app
 }
 
 # ---------------------------------------------------------------------------
@@ -368,11 +372,13 @@ for record in "${SCREENS[@]}"; do
         ;;
       played-en)
         reinstall_clean
-        seed_profile "$FIXTURE"
+        CURRENT_FIXTURE="$FIXTURE"
+        seed_profile "$CURRENT_FIXTURE"
         ;;
       played-zh)
         reinstall_clean
-        seed_profile "$WORK_DIR/played-zh.json"
+        CURRENT_FIXTURE="$WORK_DIR/played-zh.json"
+        seed_profile "$CURRENT_FIXTURE"
         ;;
       *)
         die "unknown phase '$phase' for $name"
@@ -382,8 +388,8 @@ for record in "${SCREENS[@]}"; do
     current_phase="$phase"
   fi
 
-  # Same trap as above, and this one is worse: the sign-up record has no deep
-  # link, so `[ -n "$link" ] && navigate` would end the run under `set -e`
+  # Same trap as above, and this one is worse: the sign-up record names no
+  # screen, so `[ -n "$link" ] && navigate` would end the run under `set -e`
   # before a single screen was captured.
   if [ -n "$link" ]; then navigate "$link"; fi
   capture "$name" "${expected[@]}"

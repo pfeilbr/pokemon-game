@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { CrashBoundary } from './src/CrashBoundary';
 import { GameProvider, useGame } from './src/game/GameContext';
@@ -12,6 +12,8 @@ import { PickOpponent } from './src/screens/PickOpponent';
 import { ProgressScreen } from './src/screens/ProgressScreen';
 import { SignIn } from './src/screens/SignIn';
 import { Settings } from './src/screens/Settings';
+import { findCreature } from './src/engine';
+import { readCaptureScreen } from './src/storage';
 import { colors } from './src/theme';
 
 /**
@@ -114,25 +116,35 @@ function Router({ screen, setScreen }: { screen: Screen; setScreen: (screen: Scr
  * the Home link navigates away from it.
  */
 /**
- * `mathmon://screen/album`, `mathmon://screen/battle?opponent=vinari`.
+ * The screen `mobile/scripts/capture_screens.sh` asked for, by name.
  *
- * A deep link selects a screen and can do nothing else. It deliberately cannot
- * carry state: `simctl` can open a URL but cannot tap, so this is how
- * `mobile/scripts/capture_screens.sh` walks the app through its screens for
- * `mobile/docs/screens/` - but a link that could write the save would be a hole
- * in a child's album for the life of the app, to save the harness twenty lines.
- * The seeded save the harness needs goes in through the filesystem instead.
+ * `simctl` can launch and screenshot but cannot tap, so the harness needs one
+ * way to say which screen to photograph. It writes `SCREEN_KEY` into the app's
+ * own storage alongside the seeded save, and this turns that name into a
+ * screen, optionally with an opponent (`battle:vinari`) because the battle
+ * screen is the one worth photographing most and cannot be reached without
+ * one. The opponent is checked against the real roster, so the only thing this
+ * can carry is a creature that already exists - never a profile, never a score.
+ *
+ * This replaced a `mathmon://screen/<name>` deep link. The link could not work:
+ * iOS confirms a custom-scheme open with a dialog and waits for a tap, so two
+ * CI runs photographed "Open in Mathmon?" instead of the game. A key the app
+ * only reads is also the smaller hook - a URL is reachable by anything on the
+ * device, this is not.
  *
  * Exported and pure, so it is tested without a renderer.
  */
-const SCREEN_LINK = /^[a-z][a-z0-9+.-]*:\/\/screen\/([a-z]+)(?:\?opponent=([a-z-]+))?$/;
+export function screenFromName(name: string | null): Screen | null {
+  if (name === null) return null;
 
-export function screenFromUrl(url: string | null): Screen | null {
-  if (!url) return null;
-  const match = SCREEN_LINK.exec(url);
-  if (!match) return null;
-  const [, name, opponentId] = match;
-  switch (name) {
+  const [screen, opponentId] = name.split(':');
+  if (screen === 'battle') {
+    // An id the roster does not have would throw inside `getCreature` and land
+    // the child on the crash screen, so it is refused here instead.
+    return opponentId && findCreature(opponentId) ? { name: 'battle', opponentId } : null;
+  }
+
+  switch (screen) {
     case 'home':
       return { name: 'home' };
     case 'pick':
@@ -145,10 +157,6 @@ export function screenFromUrl(url: string | null): Screen | null {
       return { name: 'settings' };
     case 'signin':
       return { name: 'signin' };
-    // A battle needs an opponent; a link without one navigates nowhere rather
-    // than starting an arbitrary fight.
-    case 'battle':
-      return opponentId ? { name: 'battle', opponentId } : null;
     default:
       return null;
   }
@@ -161,13 +169,10 @@ export default function App() {
   // Lives here rather than in Router, which has early returns above the point a
   // hook could sit, and which does not own `screen`.
   useEffect(() => {
-    const open = (url: string | null) => {
-      const next = screenFromUrl(url);
+    void readCaptureScreen().then((name) => {
+      const next = screenFromName(name);
       if (next) setScreen(next);
-    };
-    void Linking.getInitialURL().then(open);
-    const subscription = Linking.addEventListener('url', (event) => open(event.url));
-    return () => subscription.remove();
+    });
   }, []);
 
   return (
