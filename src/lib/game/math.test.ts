@@ -7,6 +7,7 @@ import {
   SKILLS,
   SKILL_META,
   type Attempt,
+  type Skill,
   accuracyOf,
   averageSeconds,
   clampTier,
@@ -185,6 +186,74 @@ describe('skill coverage', () => {
 
   it('gives more time at higher tiers', () => {
     expect(parTimeForTier(1)).toBeLessThan(parTimeForTier(10));
+  });
+
+  /**
+   * A generator that asks for the tier has to spend it on the maths.
+   *
+   * A skill is allowed to be a fixed rung that the pool climbs past - `add2`,
+   * `sub2`, `add3`, `mul2`, `fraction`, `twoStep` and `missingMul` all are, and
+   * they say so by taking only `rng`. What is not allowed is a second parameter
+   * that changes what is printed and not what is computed, because that reads
+   * as a ramp to everyone who comes after and is not one.
+   *
+   * `missingAdd` was exactly that: `addPair(rng, 6, tier <= 4 ? 15 : 20)` moved
+   * the total from 15 to 18 while `addPair`'s single-digit addends pinned the
+   * answer to 1..9 at tier 3 and at tier 7 alike. `scripts/audit_curriculum.py`
+   * found it. It matters more since promotion stopped being gated on speed: an
+   * accurate-but-slow child now reaches tiers 5-7, so a flat rung sitting there
+   * is a flat spot in the part of the ladder that just opened up.
+   */
+  it('spends the tier parameter on the answer, not just on the screen', () => {
+    const hardest = (skill: Skill, tier: number): number => {
+      const rng = createRng(`math.test:ramp:${skill}:${tier}`);
+      let top = 0;
+      for (let i = 0; i < 3000; i++)
+        top = Math.max(top, SKILL_META[skill].generate(rng, tier).answer);
+      return top;
+    };
+
+    for (const skill of SKILLS) {
+      const meta = SKILL_META[skill];
+      // `generate` declaring a second parameter is the claim being checked.
+      if (meta.generate.length < 2) continue;
+      expect(
+        hardest(skill, meta.maxTier),
+        `${skill} takes a tier but asks no harder at tier ${meta.maxTier} than at ${meta.minTier}; ` +
+          'either make it scale or let it take only rng',
+      ).toBeGreaterThan(hardest(skill, meta.minTier));
+    }
+  });
+
+  it('grows the missing number in missingAdd, not only the total on screen', () => {
+    const meta = SKILL_META.missingAdd;
+    const band = Array.from(
+      { length: meta.maxTier - meta.minTier + 1 },
+      (_, i) => meta.minTier + i,
+    );
+    const stats = band.map((tier) => {
+      const rng = createRng(`math.test:missingAdd:${tier}`);
+      let top = 0;
+      let total = 0;
+      for (let i = 0; i < 4000; i++) {
+        const { prompt, answer } = meta.generate(rng, tier);
+        // The answer is the missing addend, so it is what the child computes.
+        expect(prompt).toMatch(/^\d+ \+ \? = \d+$/);
+        expect(Number.isInteger(answer)).toBe(true);
+        expect(answer).toBeGreaterThan(0);
+        top = Math.max(top, answer);
+        total += answer;
+      }
+      return { tier, top, mean: total / 4000 };
+    });
+
+    for (let i = 1; i < stats.length; i++) {
+      const here = stats[i]!;
+      const before = stats[i - 1]!;
+      expect(here.top, `tier ${here.tier} ceiling`).toBeGreaterThanOrEqual(before.top);
+      expect(here.mean, `tier ${here.tier} mean`).toBeGreaterThan(before.mean);
+    }
+    expect(stats.at(-1)!.top).toBeGreaterThan(stats[0]!.top);
   });
 });
 

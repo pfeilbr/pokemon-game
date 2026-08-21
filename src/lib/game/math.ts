@@ -224,9 +224,37 @@ export const SKILL_META: Record<Skill, SkillMeta> = {
     label: { en: 'Missing number', zh: '填空加法' },
     minTier: 3,
     maxTier: 7,
+    /**
+     * The missing number itself grows with the tier, not just the total.
+     *
+     * This used to read `addPair(rng, 6, tier <= 4 ? 15 : 20)`, which looks like
+     * a ramp and is not one: `addPair` forces both addends to a single digit, so
+     * the tier moved the total printed on screen from 15 to 18 and left the
+     * answer at 1..9 at every tier of the band. `scripts/audit_curriculum.py`
+     * measured it - 5.25 mean at tier 3, 6.01 at tier 7, ceiling 9 throughout -
+     * which is `add1` arithmetic still on screen at tier 7, next to `91 − 7`.
+     * A skill may honestly be a fixed rung the pool moves past (`add2` is one),
+     * but this one declares a five-tier band and had a tier parameter that only
+     * pretended to use it.
+     *
+     * So the band is two rungs. Tiers 3-4 are the first meeting with the shape,
+     * where the arithmetic stays inside 20 and only the `?` is new. From tier 5
+     * the anchor is two-digit and the gap widens - counting on past one ten,
+     * then several - which is the same inverse-addition idea aimed at the
+     * subtraction (`sub2`) it shares those tiers with.
+     */
     generate: (rng, tier) => {
-      const [a, b] = addPair(rng, 6, tier <= 4 ? 15 : 20);
-      return { prompt: `${a} + ? = ${a + b}`, answer: b };
+      if (tier <= 4) {
+        const [a, b] = addPair(rng, 6, tier <= 3 ? 15 : 20);
+        return { prompt: `${a} + ? = ${a + b}`, answer: b };
+      }
+      // Never below 2: a gap of 0 is `47 + ? = 47`, which the audit rightly
+      // calls degenerate, and 1 is counting on by one.
+      const answer = rng.int(2, tier <= 5 ? 12 : tier <= 6 ? 19 : 29);
+      // The total stays inside two digits, so the prompt stays one line and the
+      // sum stays in the range the rest of this tier's pool works in.
+      const a = rng.int(11, 99 - answer);
+      return { prompt: `${a} + ? = ${a + answer}`, answer };
     },
   },
   mul1: {
