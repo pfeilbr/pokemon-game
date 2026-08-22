@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { useGame } from '@/components/GameProvider';
-import { Button, Panel, Spinner } from '@/components/ui';
+import { Button, ButtonLink, Panel, Spinner } from '@/components/ui';
 import { STRINGS } from '@/lib/i18n';
 
 function LoginForm() {
@@ -71,11 +71,12 @@ function LoginForm() {
 
       {session.googleAvailable && (
         <>
-          <a href="/api/auth/google" className="block">
-            <Button variant="secondary" size="lg" full>
-              <span aria-hidden>🔵</span> {tr('continueWithGoogle')}
-            </Button>
-          </a>
+          {/* One control, one tab stop. It used to be a `<Button>` wrapped in
+              an `<a>`, which is invalid HTML and put a focusable button that
+              does nothing in front of the anchor that actually navigates. */}
+          <ButtonLink href="/api/auth/google" variant="secondary" size="lg" full external>
+            <span aria-hidden>🔵</span> {tr('continueWithGoogle')}
+          </ButtonLink>
           <p className="text-center text-sm text-slate-400">{tr('orUsePin')}</p>
         </>
       )}
@@ -90,7 +91,7 @@ function LoginForm() {
           onChange={(e) => setName(e.target.value.slice(0, 16))}
           placeholder={tr('namePlaceholder')}
           autoComplete="username"
-          className="rounded-2xl bg-slate-950/70 px-5 py-4 text-xl font-bold text-white ring-2 ring-white/15 outline-none placeholder:text-slate-400 focus:ring-amber-300"
+          className="rounded-2xl bg-slate-950/70 px-5 py-4 text-xl font-bold text-white ring-2 ring-white/15 placeholder:text-slate-400 focus:ring-amber-300"
         />
 
         <label htmlFor="login-pin" className="mt-1 text-sm font-bold text-slate-300">
@@ -104,7 +105,7 @@ function LoginForm() {
           inputMode="numeric"
           autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
           placeholder="••••"
-          className="rounded-2xl bg-slate-950/70 px-5 py-4 text-center font-mono text-3xl tracking-[0.5em] text-white ring-2 ring-white/15 outline-none placeholder:text-slate-400 focus:ring-amber-300"
+          className="rounded-2xl bg-slate-950/70 px-5 py-4 text-center font-mono text-3xl tracking-[0.5em] text-white ring-2 ring-white/15 placeholder:text-slate-400 focus:ring-amber-300"
         />
         <p className="text-xs text-slate-400">{tr('pinHint')}</p>
 

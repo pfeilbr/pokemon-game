@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
 import { CreatureArt } from '@/components/CreatureArt';
 import { useGame } from '@/components/GameProvider';
@@ -15,10 +15,68 @@ export default function AlbumPage() {
   const router = useRouter();
   const { profile, loading, language, tr, cue } = useGame();
   const [selected, setSelected] = useState<Creature | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const openerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (!loading && !profile) router.replace('/start');
   }, [loading, profile, router]);
+
+  const close = useCallback(() => {
+    setSelected(null);
+    // Back to the card that opened it. Without this, closing drops focus on
+    // <body> and a keyboard player restarts from the top of a 36-card album
+    // every time they look at a creature.
+    openerRef.current?.focus();
+  }, []);
+
+  // Escape closes it. Clicking the backdrop is a pointer affordance with no
+  // keyboard equivalent at all, so without this the dialog is a room a
+  // keyboard player can walk into and not out of.
+  useEffect(() => {
+    if (!selected) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selected, close]);
+
+  // Focus follows the dialog in, so the next Tab is inside it rather than back
+  // among the cards it is covering.
+  useEffect(() => {
+    if (selected) dialogRef.current?.focus();
+  }, [selected]);
+
+  /**
+   * Keeps Tab inside the dialog while it is open.
+   *
+   * The cards behind it are still in the tab order - the overlay only covers
+   * them visually - so without this, tabbing walks out of the dialog and into
+   * controls the player cannot see.
+   */
+  const trapTab = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Tab') return;
+    const stops = Array.from(
+      dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      ) ?? [],
+    );
+    const first = stops[0];
+    const last = stops.at(-1);
+    if (!first || !last) {
+      event.preventDefault();
+      return;
+    }
+    const active = document.activeElement;
+    if (event.shiftKey && (active === first || active === dialogRef.current)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
 
   if (loading || !profile) {
     return (
@@ -64,9 +122,10 @@ export default function AlbumPage() {
                       key={creature.id}
                       type="button"
                       data-testid={`album-${creature.id}`}
-                      onClick={() => {
+                      onClick={(event) => {
                         if (!has) return;
                         cue('tap');
+                        openerRef.current = event.currentTarget;
                         setSelected(creature);
                       }}
                       aria-label={has ? creature.name[language] : tr('notCaughtYet')}
@@ -106,15 +165,23 @@ export default function AlbumPage() {
       {selected && (
         <div
           className="fixed inset-0 z-30 flex items-end justify-center bg-black/70 p-4 sm:items-center"
-          onClick={() => setSelected(null)}
+          onClick={close}
           role="presentation"
         >
           <Panel
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="creature-dialog-title"
+            tabIndex={-1}
+            onKeyDown={trapTab}
             className="w-full max-w-sm animate-pop text-center"
             onClick={(e) => e.stopPropagation()}
           >
             <CreatureArt creature={selected} language={language} size={140} className="mx-auto" />
-            <h3 className="mt-2 text-2xl font-black text-white">{selected.name[language]}</h3>
+            <h3 id="creature-dialog-title" className="mt-2 text-2xl font-black text-white">
+              {selected.name[language]}
+            </h3>
             <div className="my-2 flex justify-center">
               <ElementChip
                 element={selected.element}
@@ -128,7 +195,8 @@ export default function AlbumPage() {
             </p>
             <button
               type="button"
-              onClick={() => setSelected(null)}
+              data-testid="creature-dialog-close"
+              onClick={close}
               className="tap mt-4 w-full rounded-xl bg-white/10 py-3 font-bold text-white"
             >
               {tr('back')}

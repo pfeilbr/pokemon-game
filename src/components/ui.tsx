@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { ELEMENT_STYLE, type Element } from '@/lib/game/elements';
 import type { Language } from '@/lib/game/progress';
@@ -26,6 +27,17 @@ const VARIANTS: Record<NonNullable<ButtonProps['variant']>, string> = {
     'bg-gradient-to-b from-rose-600 to-rose-700 text-white shadow-[0_6px_0_0_#9f1239] active:translate-y-[3px] active:shadow-[0_3px_0_0_#9f1239]',
 };
 
+// Shared by `Button` and `ButtonLink` so a link that looks like a button is
+// styled by the same string rather than a copy of it. A module-level const,
+// not a function, because `scripts/audit_a11y.py` resolves a local `const x =
+// '...'` and would otherwise stop being able to see the `tap` utility in
+// here - which is how it proves the 56px floor.
+const BUTTON_BASE =
+  'tap inline-flex items-center justify-center gap-2 rounded-2xl font-extrabold transition-all';
+
+const BUTTON_DISABLED =
+  'disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none disabled:active:translate-y-0';
+
 export function Button({
   variant = 'primary',
   size = 'md',
@@ -38,8 +50,8 @@ export function Button({
     <button
       {...rest}
       className={[
-        'tap inline-flex items-center justify-center gap-2 rounded-2xl font-extrabold transition-all',
-        'disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none disabled:active:translate-y-0',
+        BUTTON_BASE,
+        BUTTON_DISABLED,
         size === 'lg' ? 'px-8 py-5 text-2xl' : 'px-5 py-3.5 text-lg',
         full ? 'w-full' : '',
         VARIANTS[variant],
@@ -53,11 +65,69 @@ export function Button({
   );
 }
 
+/**
+ * A link that looks like a button.
+ *
+ * It exists because the alternative people reach for is a Link wrapped around
+ * a Button, and that is two tab stops for one control: the stop that *looks*
+ * like the button is a button element that does nothing, and the navigation
+ * belongs to the anchor around it. It is also invalid HTML - interactive
+ * content inside an anchor - and `scripts/audit_focus.py` fails the build on
+ * it. Both of the places that did this are now here.
+ *
+ * `external` renders a plain anchor for a destination Next's router cannot
+ * own, such as `/api/auth/google`, which is a redirect rather than a page.
+ *
+ * The class list is spliced into each `className` as a template rather than
+ * passed as a computed variable so that `scripts/audit_a11y.py` can still read
+ * the `tap` utility out of it and prove the 56px floor; handed a `{classes}`
+ * identifier it can only shrug and file the control under NEEDS REVIEW.
+ */
+export function ButtonLink({
+  href,
+  variant = 'primary',
+  size = 'md',
+  full = false,
+  external = false,
+  className = '',
+  children,
+}: {
+  href: string;
+  variant?: ButtonProps['variant'];
+  size?: ButtonProps['size'];
+  full?: boolean;
+  external?: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  const rest = [
+    size === 'lg' ? 'px-8 py-5 text-2xl' : 'px-5 py-3.5 text-lg',
+    full ? 'w-full' : '',
+    VARIANTS[variant ?? 'primary'],
+    className,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  if (external) {
+    return (
+      <a href={href} className={`${BUTTON_BASE} ${rest}`}>
+        {children}
+      </a>
+    );
+  }
+  return (
+    <Link href={href} className={`${BUTTON_BASE} ${rest}`}>
+      {children}
+    </Link>
+  );
+}
+
 export function Panel({
   children,
   className = '',
   ...rest
-}: { children: ReactNode; className?: string } & React.HTMLAttributes<HTMLDivElement>) {
+}: { children: ReactNode; className?: string } & React.ComponentPropsWithRef<'div'>) {
   return (
     <div {...rest} className={`panel p-4 sm:p-5 ${className}`}>
       {children}

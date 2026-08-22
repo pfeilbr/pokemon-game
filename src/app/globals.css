@@ -115,11 +115,21 @@ button,
   }
 }
 
-/* Focus ring that is obvious to a child navigating with a keyboard. */
+/* Focus ring that is obvious to a child navigating with a keyboard.
+
+   Everything in the web client relies on this one rule - no component draws a
+   ring of its own - so `scripts/audit_focus.py` reads the outline back out of
+   here and fails the build if it is ever removed, thinned below 2px or
+   suppressed by an `outline-none` with nothing put back in its place.
+
+   No `border-radius` here. It used to set one, which does not round the
+   outline - the outline already follows the element's own corners - it rounds
+   *the element*, so the settings pill and the round nav buttons snapped from
+   `rounded-full` to 8px the moment they were tabbed to. A focus ring must not
+   change the shape of the thing it is pointing at. */
 :focus-visible {
   outline: 3px solid var(--color-spark);
   outline-offset: 3px;
-  border-radius: 0.5rem;
 }
 
 @utility panel {

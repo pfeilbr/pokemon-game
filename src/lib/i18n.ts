@@ -49,6 +49,13 @@ export const STRINGS = {
 
   // Battle
   chooseMove: { en: 'Pick your move', zh: '选择招式' },
+  /**
+   * Names the action column - the moves, then the keypad, then Continue. It is
+   * the region focus is moved to when a phase change unmounts whatever the
+   * keyboard was standing on, so this is what a screen reader announces at the
+   * start of every turn.
+   */
+  battleActions: { en: 'Battle actions', zh: '战斗操作' },
   charge: { en: 'Charge', zh: '能量' },
   combo: { en: 'Combo', zh: '连击' },
   answer: { en: 'Answer', zh: '答案' },

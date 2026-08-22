@@ -157,6 +157,7 @@ export function Battle({ playerCreatureId, opponentId, onExit, onRematch }: Prop
   const [outcome, setOutcome] = useState<BattleOutcome | null>(null);
   const recorded = useRef(false);
   const viewportWidth = useViewportWidth();
+  const actionsRef = useRef<HTMLDivElement | null>(null);
 
   const player = getCreature(state.player.creatureId);
   const foe = getCreature(state.foe.creatureId);
@@ -173,6 +174,32 @@ export function Battle({ playerCreatureId, opponentId, onExit, onRematch }: Prop
       dispatch({ type: 'beginCatch', now: Date.now() });
     }
   }, [state.phase, state.problemShownAt]);
+
+  /**
+   * Where the keyboard goes when the screen changes underneath it.
+   *
+   * Every phase replaces the whole action column: the move buttons become the
+   * keypad, the keypad becomes "Continue", and back again. Whatever the player
+   * was standing on is unmounted, and the browser drops focus on <body> - so a
+   * keyboard player has to Tab in from the top of the page *every single
+   * turn*, past the header, the nav and both creature cards. The keypad's
+   * global key listener hides this from a player who only types digits; it is
+   * plainly broken for anyone who tabs.
+   *
+   * Focus moves to the action column itself rather than to a control inside
+   * it. It is the region that changed, Tab continues naturally from there into
+   * the new controls, and nothing is pressed by accident on the way.
+   *
+   * Only when focus was genuinely lost. Someone who has deliberately tabbed
+   * elsewhere keeps their place, which also means a player using a pointer
+   * never has the page yanked around: `preventScroll` for the same reason -
+   * the column is where they were already looking.
+   */
+  useEffect(() => {
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    actionsRef.current?.focus({ preventScroll: true });
+  }, [state.phase]);
 
   // Auto-advance out of the resolve animation.
   useEffect(() => {
@@ -377,8 +404,15 @@ export function Battle({ playerCreatureId, opponentId, onExit, onRematch }: Prop
         </Panel>
       </div>
 
-      {/* Action area */}
-      <div className="flex flex-col gap-2 sm:gap-3">
+      {/* Action area. `tabIndex={-1}` makes it a focus target without adding a
+          tab stop - see the phase effect above for why it needs to be one. */}
+      <div
+        ref={actionsRef}
+        tabIndex={-1}
+        role="group"
+        aria-label={tr('battleActions')}
+        className="flex flex-col gap-2 sm:gap-3"
+      >
         {state.phase === 'choosing' && (
           <div className="grid grid-cols-2 gap-2.5">
             {moves.map((move) => (
@@ -615,10 +649,24 @@ function VictoryScreen({
   const summary = useMemo(() => summarise(state), [state]);
   const foe = getCreature(state.foe.creatureId);
   const won = summary.won;
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
+
+  // This screen replaces the entire battle, so the control the player was on
+  // no longer exists and focus is sitting on <body>. Announce the result and
+  // put the keyboard at the top of what replaced it, one Tab from "Play
+  // again". Scrolling is wanted here, unlike mid-battle: the page underneath
+  // may have been scrolled down, and the heading is the new top.
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, []);
 
   return (
     <div className="flex flex-col items-center gap-4 py-4 text-center" data-testid="battle-result">
-      <h1 className={`text-4xl font-black ${won ? 'text-amber-300' : 'text-slate-300'}`}>
+      <h1
+        ref={headingRef}
+        tabIndex={-1}
+        className={`text-4xl font-black ${won ? 'text-amber-300' : 'text-slate-300'}`}
+      >
         {won ? `🎉 ${tr('youWin')}` : tr('youLost')}
       </h1>
 

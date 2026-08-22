@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { AppShell } from '@/components/AppShell';
 import { useGame } from '@/components/GameProvider';
-import { Button, Panel, Spinner } from '@/components/ui';
+import { Button, ButtonLink, Panel, Spinner } from '@/components/ui';
 import type { Language } from '@/lib/game/progress';
 
 export default function SettingsPage() {
@@ -113,9 +113,9 @@ export default function SettingsPage() {
             </Button>
           ) : (
             session.accountsAvailable && (
-              <Link href="/login">
-                <Button full>{tr('signInToSave')}</Button>
-              </Link>
+              <ButtonLink href="/login" full>
+                {tr('signInToSave')}
+              </ButtonLink>
             )
           )}
         </Panel>

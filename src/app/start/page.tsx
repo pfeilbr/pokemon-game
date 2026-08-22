@@ -63,7 +63,7 @@ export default function StartPage() {
             placeholder={tr('namePlaceholder')}
             autoComplete="nickname"
             autoFocus
-            className="w-full rounded-2xl bg-slate-950/70 px-5 py-5 text-2xl font-bold text-white ring-2 ring-white/15 outline-none placeholder:text-slate-400 focus:ring-amber-300"
+            className="w-full rounded-2xl bg-slate-950/70 px-5 py-5 text-2xl font-bold text-white ring-2 ring-white/15 placeholder:text-slate-400 focus:ring-amber-300"
           />
           {error && <p className="font-semibold text-rose-400">{error}</p>}
           <Button onClick={goToPartner} size="lg" full>

@@ -180,6 +180,15 @@ jobs:
       - name: Contrast audit (WCAG ratios for the real colour pairs)
         run: python3 scripts/audit_contrast.py
 
+      # Keyboard play became a supported path when the keypad gained physical
+      # keys, and nothing guarded it. Focus fell to <body> three times a turn in
+      # a battle - every phase change replaces the action column - so a keyboard
+      # player Tabbed in from the top of the page on every single turn. The
+      # keypad's own window listener hid that from anyone who only types digits,
+      # which is exactly why it went unnoticed.
+      - name: Focus and keyboard audit (rings, tab order, reachability)
+        run: python3 scripts/audit_focus.py
+
       - name: Typecheck
         run: npm run typecheck
 
