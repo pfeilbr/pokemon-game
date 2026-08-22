@@ -71,6 +71,16 @@ jobs:
       - name: API surface audit (body limits, throttling, cookies, leaks)
         run: python3 scripts/audit_api.py
 
+      # There was no Content-Security-Policy at all - three headers and nothing
+      # else, on a game with PIN accounts and Google SSO. What is there now is
+      # an exfiltration lockdown and a third-party-code ban, NOT XSS-proofing:
+      # the App Router ships its RSC payload as inline <script> tags and all
+      # nine routes are prerendered, so there is no request at which to mint a
+      # nonce. This audit exists mostly to stop the policy being widened by
+      # someone who mistook it for the stronger thing.
+      - name: Security header audit (CSP parses and defeats nothing)
+        run: python3 scripts/audit_headers.py
+
       # A screenshot suite that photographs a blank rectangle passes exactly as
       # happily as one that photographs the game - and this repo has already
       # shipped a green iOS run that was photographing a redbox. Decodes the
