@@ -274,7 +274,15 @@ test.describe('keyboard-only play', () => {
     // Lose on purpose - it is much the shorter route to the result screen, and
     // losing still awards XP, so it is a real end of a real battle. Wrong
     // answers deal flat chip damage and the foe hits back every turn.
-    for (let guard = 0; guard < 60; guard++) {
+    // Bounded by TIME, not by iterations. It used to be `guard < 60`, and every
+    // frame where neither the question nor the moves are on screen - a
+    // "Correct!" banner, a hit animation - spends one of those iterations on a
+    // 100ms wait without advancing the battle. A slower machine shows more of
+    // those frames, so CI burned the whole budget mid-fight and then waited 30s
+    // for a result screen that was never going to arrive. It passed here and
+    // failed on both projects there, twice each, including retries.
+    const deadline = Date.now() + 90_000;
+    while (Date.now() < deadline) {
       if (
         await page
           .getByTestId('battle-result')
