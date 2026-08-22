@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { STORAGE_KEY } from '../src/lib/storage/client';
 import { answerCurrentProblem, createTrainer, playBattleToEnd, solve } from './helpers';
@@ -26,6 +26,98 @@ mkdirSync(OUT, { recursive: true });
 const MIN_RENDERED_TEXT = 40;
 
 /**
+ * The path prefix the app is served under, if any (GitHub Pages builds set it).
+ * Empty for every normal build, including every capture run.
+ */
+const BASE_PATH = process.env.PAGES_BASE_PATH ?? '';
+
+/**
+ * The id of the production build sitting in the working tree.
+ *
+ * `next build` writes a fresh random id here every time, and `next start`
+ * serves that build's client assets under `/_next/static/<id>/`. So the id is a
+ * stamp naming exactly one server: the one built from this tree. A `next dev`
+ * server serves `development` and has no such path; a `next start` left over
+ * from an earlier build serves a different id. Neither can forge ours.
+ */
+function buildIdOnDisk(): string {
+  try {
+    const id = readFileSync('.next/BUILD_ID', 'utf8').trim();
+    if (id) return id;
+  } catch {
+    // An unreadable stamp is a missing one - same message either way.
+  }
+  throw new Error(
+    'There is no production build to photograph: .next/BUILD_ID is missing or empty.\n' +
+      'Run `npm run build` before capturing screenshots.',
+  );
+}
+
+/** One check per origin, not one per capture. */
+const stampChecked = new Map<string, Promise<void>>();
+
+/**
+ * Refuses to photograph a server this run did not start.
+ *
+ * `playwright.config.ts` gives a capture run its own port and forbids it to
+ * reuse a server, which makes the collision that caused the incident
+ * impossible - but "impossible" is a property of one code path, and the
+ * screenshot spec also runs inside a plain `npm run test:e2e` (which does
+ * reuse), and can be pointed anywhere with `E2E_BASE_URL`. This is the check
+ * that holds in all of them, and the only one that catches the nastiest shape
+ * of the bug: the port is right, a server is listening, it renders the app
+ * perfectly - and it is a `next dev` server, or a build from last week.
+ *
+ * A wrong page is caught by the text guard below. A wrong *server* renders a
+ * page that looks completely fine, so nothing downstream can catch it: the
+ * pixels are plausible, the tests pass, and the wrong picture is committed.
+ */
+async function assertServerIsOurs(page: Page): Promise<void> {
+  const here = new URL(page.url());
+  if (here.protocol !== 'http:' && here.protocol !== 'https:') {
+    throw new Error(`Cannot verify the server under test: the page is at ${page.url()}`);
+  }
+  const origin = here.origin;
+
+  let check = stampChecked.get(origin);
+  if (!check) {
+    check = (async () => {
+      const id = buildIdOnDisk();
+      const stamp = (build: string) =>
+        `${origin}${BASE_PATH}/_next/static/${build}/_buildManifest.js`;
+
+      const ours = await page.request.get(stamp(id), { failOnStatusCode: false });
+      if (ours.ok()) return;
+
+      const dev = await page.request.get(stamp('development'), { failOnStatusCode: false });
+      const found = dev.ok()
+        ? 'a `next dev` server (dev serves `development`, never a build id)'
+        : 'a server built from something else - an older build, or not this app at all';
+
+      throw new Error(
+        [
+          `Refusing to photograph ${origin}: it is not serving this build.`,
+          '',
+          `  this tree's build (.next/BUILD_ID)   ${id}`,
+          `  what is answering on ${origin}   ${found}`,
+          '',
+          'docs/screenshots/ is committed and the README is built from it, so a',
+          'capture taken against the wrong server is a permanent wrong picture of',
+          'the app - which is exactly how seven blank captures were produced, four',
+          'of them by tests that reported PASS.',
+          '',
+          'Either stop whatever is on that port, or run `npm run build` and then',
+          '`npm run screenshots`, which starts a server of its own on port 3177 and',
+          'refuses to reuse one.',
+        ].join('\n'),
+      );
+    })();
+    stampChecked.set(origin, check);
+  }
+  await check;
+}
+
+/**
  * Captures one screenshot, refusing to capture a page that has not painted.
  *
  * `page.screenshot()` is happy to photograph an empty shell, and on the run
@@ -39,6 +131,10 @@ const MIN_RENDERED_TEXT = 40;
  * is the second net, not the only one.
  */
 const shot = async (page: Page, name: string) => {
+  // First, because a blank page served by a foreign server should be reported
+  // as the foreign server, not as a page that failed to paint - and because
+  // waiting ten seconds for the text poll to time out buries the real cause.
+  await assertServerIsOurs(page);
   await expect
     .poll(async () => (await page.locator('main').first().innerText()).trim().length, {
       message: `${name}: <main> never rendered - refusing to photograph a blank page`,

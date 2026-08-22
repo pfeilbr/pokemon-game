@@ -63,15 +63,32 @@ run or `npm run preflight -- --restore`. A crash that left your
 
 `npm run audits` runs the audit scripts alone, without the parking.
 
-**Regenerate screenshots against their own port**, e.g. `PORT=3177 npm run
-screenshots`. `playwright.config.ts` sets `reuseExistingServer: !process.env.CI`,
-so a screenshot run will silently attach to any dev server already listening and
-photograph whatever that server is serving — which is how seven blank captures
-were produced, four of them from tests that reported PASS. `shot()` now refuses
-to photograph a page with almost no visible text, and `scripts/audit_screenshots.py`
-catches what gets past it: it found `12-chinese.png` byte-identical to
+**A screenshot run cannot photograph a server it did not start.** `npm run
+screenshots` sets `E2E_CAPTURE=1`, which gives the capture run port 3177 of its
+own and `reuseExistingServer: false`, so it starts its own `next start` or dies
+with `http://127.0.0.1:3177 is already used`. It can no longer attach to the dev
+server on :3000 or the E2E server on :3100 — the collision that produced seven
+blank captures, four of them from tests that reported PASS, is now a startup
+error rather than a silent attachment. The ordinary `npm run test:e2e` keeps
+reusing a server locally, because it writes nothing into the repository.
+
+The port is the cheap half. The guard is in `e2e/screenshots.spec.ts`: before
+every capture it asks the server for
+`/_next/static/<.next/BUILD_ID>/_buildManifest.js`, which only the build in this
+working tree can answer — a `next dev` server serves `development`, and a `next
+start` from an older build serves another id. A wrong server therefore fails by
+name ("Refusing to photograph http://127.0.0.1:3100: it is not serving this
+build") instead of quietly writing the wrong picture, and it fails in every run
+mode, including a full `npm run test:e2e` and an `E2E_BASE_URL` run. `shot()`'s
+blank-page check and `scripts/audit_screenshots.py` remain the backstops behind
+it — the latter is what found `12-chinese.png` byte-identical to
 `02-dashboard.png`, meaning the README's only picture of the Chinese interface
 had always been an English dashboard.
+
+Run `npm run build` first. The check proves the server is serving the build on
+disk; nothing proves that build matches your latest edit. An mtime comparison
+would catch that and would false-alarm constantly in a tree several people are
+editing, so it is deliberately absent rather than noisy.
 
 ### iOS
 
