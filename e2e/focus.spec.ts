@@ -229,25 +229,32 @@ test.describe('keyboard-only play', () => {
     // Three turns is enough to cross every transition the loop has: question
     // to result, result back to the move buttons, and round again.
     for (let turn = 0; turn < 3; turn++) {
-      if (await page.getByTestId('battle-result').isVisible().catch(() => false)) break;
+      if (
+        await page
+          .getByTestId('battle-result')
+          .isVisible()
+          .catch(() => false)
+      )
+        break;
 
-      if (await page.getByTestId('problem').isVisible().catch(() => false)) {
+      if (
+        await page
+          .getByTestId('problem')
+          .isVisible()
+          .catch(() => false)
+      ) {
         const prompt = await page.getByTestId('problem').innerText();
         await page.keyboard.type(String(solve(prompt)));
         await page.keyboard.press('Enter');
         await expect(page.getByTestId('problem')).toBeHidden();
-        expect(
-          await focused(page),
-          'focus was dropped when the answer resolved',
-        ).not.toBe('body');
+        expect(await focused(page), 'focus was dropped when the answer resolved').not.toBe('body');
       }
 
       const moves = page.getByTestId('move-strong');
       await expect(moves).toBeVisible({ timeout: 15_000 });
-      expect(
-        await focused(page),
-        'focus was dropped when the turn came back around',
-      ).not.toBe('body');
+      expect(await focused(page), 'focus was dropped when the turn came back around').not.toBe(
+        'body',
+      );
 
       // Reachable again without walking in from the top of the page: whatever
       // holds focus now is inside the battle, so the moves are a few Tabs away
@@ -268,8 +275,19 @@ test.describe('keyboard-only play', () => {
     // losing still awards XP, so it is a real end of a real battle. Wrong
     // answers deal flat chip damage and the foe hits back every turn.
     for (let guard = 0; guard < 60; guard++) {
-      if (await page.getByTestId('battle-result').isVisible().catch(() => false)) break;
-      if (await page.getByTestId('problem').isVisible().catch(() => false)) {
+      if (
+        await page
+          .getByTestId('battle-result')
+          .isVisible()
+          .catch(() => false)
+      )
+        break;
+      if (
+        await page
+          .getByTestId('problem')
+          .isVisible()
+          .catch(() => false)
+      ) {
         await page.keyboard.type('0');
         await page.keyboard.press('Enter');
         continue;

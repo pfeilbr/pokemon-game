@@ -822,7 +822,19 @@ def check_remote_refs(files: list[str], report: Report) -> None:
                 in_comment = mask[match.start()]
                 snippet = excerpt_at(text, starts, lineno)
                 detail = f"{label}: {match.group(0)!r}"
-                if in_comment:
+                # A test is not shipped, and the one that matters here asserts a
+                # remote fetch is BLOCKED: `e2e/headers.spec.ts` tries to reach
+                # https://example.com/pixel.png to prove `connect-src 'self'`
+                # stops an injected script exfiltrating the save. Failing the
+                # no-remote-assets audit for proving the app fetches nothing
+                # remote is the check contradicting itself. Reported, never
+                # fatal, so a real asset creeping into a spec is still visible.
+                if is_test(path):
+                    report.note(
+                        "B. Remote asset host in a TEST (not shipped - allowed)",
+                        Finding(path, lineno, detail, snippet),
+                    )
+                elif in_comment:
                     report.note(
                         "B. Remote asset host named in a COMMENT (prose - allowed)",
                         Finding(path, lineno, detail, snippet),

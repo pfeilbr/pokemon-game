@@ -240,17 +240,25 @@ BUDGETS: tuple[Budget, ...] = (
     ),
     Budget(
         key="emitted-client-assets",
-        limit=880_000,
-        measured=790_154,
+        limit=922_000,
+        measured=882_400,
         unit="raw",
         what="every client asset the build emitted, uncompressed",
         why=(
             "First load is not the whole story: a chunk fetched on navigation "
             "to /album is still weight a child waits for, and it never appears "
             "in a first-load figure. Raw rather than gzipped because this is "
-            "about what the device parses and caches. A wider band (11.4%) "
-            "because it is a coarser guard than the transfer numbers."
-        ),
+            "about what the device parses and caches. "
+            "\n\n"
+            "Headroom is now ~40 KB absolute, not the 11.4% band this started "
+            "with. A percentage band grows as the app grows, so it gets "
+            "steadily worse at its job: at 790 KB it allowed 90 KB of accident, "
+            "and rescaled at 882 KB it would allow 100. 40 KB raw still catches "
+            "every realistic mistake - lodash, moment, date-fns, an icon set - "
+            "while leaving room for the app itself to keep growing. "
+            "Raised once, deliberately: the +92 KB since the original baseline "
+            "is the chess strand, prompt.ts, the error boundaries, the service "
+            "worker and the focus work, each of which the chunk table names."),
     ),
 )
 
